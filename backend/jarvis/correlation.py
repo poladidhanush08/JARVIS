@@ -28,6 +28,9 @@ class Correlator:
         self._events = {}
         self._counter = 0
 
+    def events_for(self, incident_id: str) -> list[Event]:
+        return list(self._events.get(incident_id, []))
+
     def score(self, event: Event, incident: Incident) -> tuple[float, list[str]]:
         events = self._events.get(incident.id, [])
         services = set(incident.affected_services)

@@ -85,3 +85,12 @@ def test_merge_promoted_incidents_into_oldest():
     assert len(inc.event_ids) == 3
     assert {"user-db", "payment-service"} == set(inc.affected_services)
     assert inc.start_time == T0 and inc.last_event_time == T0 + timedelta(seconds=180)
+
+
+def test_events_for_returns_incident_events():
+    c = Correlator(ServiceGraph.default())
+    a, b = ev(0, "user-db", "pool exhausted"), ev(2, "user-db", "pool exhausted")
+    inc_id = c.add(a)
+    c.add(b)
+    assert [e.id for e in c.events_for(inc_id)] == [a.id, b.id]
+    assert c.events_for("nope") == []
