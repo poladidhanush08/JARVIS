@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Callable
 
-from jarvis.correlation import Correlator
+from jarvis.correlation import WINDOW_S, Correlator
 from jarvis.graph import ServiceGraph
 from jarvis.impact import compute_impact, key_moments, make_title, severity
 from jarvis.models import Event, Incident
@@ -29,23 +29,37 @@ class Engine:
         self.clock = clock
         self._correlator = Correlator(self.graph)
         self._events: list[Event] = []
+        self._seen: set[str] = set()
         self._event_incident: dict[str, str] = {}
 
     def reset(self) -> None:
         self._correlator.reset()
         self._events = []
+        self._seen = set()
         self._event_incident = {}
 
     def ingest(self, events: list[Event]) -> list[str]:
-        self._events.extend(events)
-        touched: list[str] = []
-        for event in events:
+        fresh = []
+        for e in events:
+            if e.id not in self._seen:
+                self._seen.add(e.id)
+                fresh.append(e)
+        if not fresh:
+            return []
+        self._events.extend(fresh)
+        touched: set[str] = set()
+        for event in fresh:
             inc_id = self._correlator.add(event)
-            if inc_id is not None and inc_id not in touched:
-                touched.append(inc_id)
-        changed = [i for i in touched if i in self._correlator.incidents]  # merges may delete ids
+            if inc_id is not None:
+                touched.add(inc_id)
+        newest = max(e.timestamp for e in fresh)
+        incidents = self._correlator.incidents  # merges may have deleted touched ids
+        changed = [
+            i.id for i in incidents.values()
+            if i.id in touched or (newest - i.last_event_time).total_seconds() <= WINDOW_S
+        ]
         for inc_id in changed:
-            self._enrich(self._correlator.incidents[inc_id])
+            self._enrich(incidents[inc_id])
         return changed
 
     def _enrich(self, inc: Incident) -> None:
