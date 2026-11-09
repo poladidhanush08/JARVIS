@@ -50,8 +50,10 @@ export default function EventsPage() {
   useEffect(() => {
     if (recentEvents.length === 0) return;
     const wait = REFETCH_MS - (Date.now() - lastFetch.current);
-    if (wait <= 0) load();
-    else {
+    if (wait <= 0) {
+      clearTimeout(pending.current);
+      load();
+    } else {
       clearTimeout(pending.current);
       pending.current = setTimeout(load, wait);
     }
@@ -163,7 +165,7 @@ export default function EventsPage() {
           </tbody>
         </table>
       </div>
-      {selected && <EventSheet row={selected} onClose={closeSheet} />}
+      {selected && <EventSheet row={selected} onClose={closeSheet} assigning={!rows.some((r) => r.event.id === selected.event.id)} />}
     </div>
   );
 }

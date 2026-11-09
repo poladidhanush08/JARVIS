@@ -22,6 +22,14 @@ function SimulatorCard() {
   const [status, setStatus] = useState<SimulatorStatus | null>(null);
   const [error, setError] = useState("");
 
+  const apply = useCallback((s: SimulatorStatus, seedScenario = false) => {
+    setStatus(s);
+    if (s.state === "running" || s.state === "paused") {
+      setSpeed(s.speed);
+      if (seedScenario && s.scenario) setScenarioId(s.scenario);
+    }
+  }, []);
+
   useEffect(() => {
     let alive = true;
     getScenarios()
@@ -36,13 +44,13 @@ function SimulatorCard() {
     simulator
       .status()
       .then((s) => {
-        if (alive) setStatus(s);
+        if (alive) apply(s, true);
       })
       .catch(() => {});
     return () => {
       alive = false;
     };
-  }, []);
+  }, [apply]);
 
   const state = status?.state ?? "idle";
   const active = state === "running" || state === "paused";
@@ -53,7 +61,7 @@ function SimulatorCard() {
       simulator
         .status()
         .then((s) => {
-          if (alive) setStatus(s);
+          if (alive) apply(s);
         })
         .catch(() => {});
     }, 1000);
@@ -61,11 +69,11 @@ function SimulatorCard() {
       alive = false;
       clearInterval(t);
     };
-  }, [active]);
+  }, [active, apply]);
 
   const run = async (fn: () => Promise<SimulatorStatus>) => {
     try {
-      setStatus(await fn());
+      apply(await fn());
       setError("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Request failed.");
@@ -73,13 +81,16 @@ function SimulatorCard() {
   };
   const chooseSpeed = (n: number) => {
     setSpeed(n);
-    if (state === "running") void run(() => simulator.speed(n));
+    if (active) void run(() => simulator.speed(n));
   };
 
   const current = scenarios.find((s) => s.id === scenarioId);
-  const statusLine = status
-    ? `${state.charAt(0).toUpperCase()}${state.slice(1)} · ${status.emitted} of ${status.total} events`
-    : "Idle";
+  const statusLine =
+    status && status.total > 0
+      ? `${state.charAt(0).toUpperCase()}${state.slice(1)} · ${status.emitted} of ${status.total} events`
+      : status
+        ? `${state.charAt(0).toUpperCase()}${state.slice(1)}`
+        : "Idle";
 
   return (
     <Card className="flex flex-col gap-4">

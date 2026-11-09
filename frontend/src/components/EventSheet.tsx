@@ -10,7 +10,7 @@ const REASON_LABELS: Record<string, string> = {
   trace: "shared trace",
 };
 
-export default function EventSheet({ row, onClose }: { row: EventRow; onClose: () => void }) {
+export default function EventSheet({ row, onClose, assigning = false }: { row: EventRow; onClose: () => void; assigning?: boolean }) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const { event, incident_id, reasons } = row;
 
@@ -72,7 +72,7 @@ export default function EventSheet({ row, onClose }: { row: EventRow; onClose: (
               {incident_id}
             </Link>
           ) : (
-            <p className="text-body text-muted">Not part of any incident</p>
+            <p className="text-body text-muted">{assigning ? "Assigning to an incident…" : "Not part of any incident"}</p>
           )}
           {incident_id && reasons.length > 0 && (
             <ul className="flex flex-wrap gap-2" aria-label="Why it was grouped">
