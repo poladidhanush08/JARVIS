@@ -4,12 +4,14 @@ import { useNavigate } from "react-router-dom";
 import Card from "../components/Card";
 import CopyButton from "../components/CopyButton";
 import { getEvents, getScenarios, HttpError, simulator, uploadLog } from "../lib/api";
+import { publicApiOrigin } from "../lib/endpoint";
 import type { Event, Scenario, SimulatorStatus, UploadResult } from "../lib/types";
 
 const SPEEDS = [1, 2, 5, 10];
 const COUNT_LIMIT = 100_000;
+const EVENTS_ENDPOINT = `${publicApiOrigin()}/api/events`;
 const CURL =
-  `curl -X POST http://localhost:8000/api/events -H "Content-Type: application/json" ` +
+  `curl -X POST ${EVENTS_ENDPOINT} -H "Content-Type: application/json" ` +
   `-d '{"service":"user-db","level":"error","message":"connection pool exhausted"}'`;
 
 const btn =
@@ -310,7 +312,7 @@ function ApiCard({ received }: { received: number | null }) {
     <Card className="flex flex-col gap-4">
       <CardHeader title="REST API" detail="Push events from any system" count={received} />
       <p className="text-label text-muted">
-        Send events with <code className="font-mono">POST http://localhost:8000/api/events</code>
+        Send events with <code className="font-mono">POST {EVENTS_ENDPOINT}</code>
       </p>
       <div className="flex items-start gap-2">
         <pre className="min-w-0 flex-1 overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-line bg-canvas p-3 font-mono text-[12px] leading-relaxed">

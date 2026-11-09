@@ -9,6 +9,7 @@ import type {
   Stats,
   UploadResult,
 } from "./types";
+import { apiUrl } from "./endpoint";
 
 /** A non-2xx API response; `status` lets callers tell "not found" from other failures. */
 export class HttpError extends Error {
@@ -21,7 +22,7 @@ export class HttpError extends Error {
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
+  const res = await fetch(apiUrl(url), init);
   if (!res.ok) {
     let detail = res.statusText;
     try {
@@ -68,7 +69,7 @@ export function uploadLog(file: File) {
 
 export const postEvents = (body: EventIn | EventIn[]) => post<{ accepted: number }>("/api/events", body);
 
-export const reportUrl = (id: string) => `/api/incidents/${encodeURIComponent(id)}/report`;
+export const reportUrl = (id: string) => apiUrl(`/api/incidents/${encodeURIComponent(id)}/report`);
 
 export const simulator = {
   start: (scenarioId: string, speed = 1) =>

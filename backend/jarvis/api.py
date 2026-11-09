@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime
 from typing import Literal
 
@@ -17,6 +18,14 @@ from jarvis.report import render_markdown
 from jarvis.simulator import Simulator, list_scenarios
 
 log = logging.getLogger(__name__)
+
+# Browsers may call the API from these sites. Override when deploying, e.g. on Render:
+#   JARVIS_CORS_ORIGINS=https://my-site.example     (comma-separated exact origins)
+#   JARVIS_CORS_ORIGIN_REGEX=https://.*\.vercel\.app  (default: any Vercel deployment)
+CORS_ORIGINS = [
+    o.strip() for o in os.environ.get("JARVIS_CORS_ORIGINS", "http://localhost:5173").split(",") if o.strip()
+]
+CORS_ORIGIN_REGEX = os.environ.get("JARVIS_CORS_ORIGIN_REGEX", r"https://.*\.vercel\.app") or None
 
 
 class EventIn(BaseModel):
@@ -91,7 +100,8 @@ def create_app() -> FastAPI:
     app = FastAPI(title="J.A.R.V.I.S.")
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173"],
+        allow_origins=CORS_ORIGINS,
+        allow_origin_regex=CORS_ORIGIN_REGEX,
         allow_methods=["*"],
         allow_headers=["*"],
     )

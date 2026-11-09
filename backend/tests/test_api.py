@@ -123,6 +123,13 @@ def test_cors_allows_dev_origin(client):
     assert r.headers["access-control-allow-origin"] == "http://localhost:5173"
 
 
+def test_cors_allows_vercel_deployments_but_not_other_sites(client):
+    ok = client.get("/api/stats", headers={"Origin": "https://jarvis-git-main-team.vercel.app"})
+    assert ok.headers["access-control-allow-origin"] == "https://jarvis-git-main-team.vercel.app"
+    other = client.get("/api/stats", headers={"Origin": "https://evil.example"})
+    assert "access-control-allow-origin" not in other.headers
+
+
 def test_events_limit_must_be_positive(client):
     assert client.get("/api/events?limit=0").status_code == 422
     assert client.get("/api/events?limit=-1").status_code == 422

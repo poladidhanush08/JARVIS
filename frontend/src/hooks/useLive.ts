@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Event, Incident, Stats, WsMessage } from "../lib/types";
+import { wsUrl } from "../lib/endpoint";
 
 const MAX_EVENTS = 50;
 const RECONNECT_MS = 1000;
@@ -34,8 +35,7 @@ export function useLive(): Live {
     let closed = false;
 
     const connect = () => {
-      const proto = location.protocol === "https:" ? "wss" : "ws";
-      ws = new WebSocket(`${proto}://${location.host}/ws`);
+      ws = new WebSocket(wsUrl());
       ws.onopen = () => setConnected(true);
       ws.onmessage = (m) => {
         let msg: WsMessage;
