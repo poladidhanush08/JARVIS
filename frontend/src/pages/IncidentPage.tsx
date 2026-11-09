@@ -86,40 +86,14 @@ function Unavailable({ title, detail }: { title: string; detail: string }) {
   );
 }
 
+/**
+ * Route shell: owns what is shared across incidents (live feed, service graph) and keys the
+ * per-incident view by id, so navigating resets its state, replay and timers.
+ */
 export default function IncidentPage() {
   const { id = "" } = useParams();
   const live = useLive();
-  const [load, setLoad] = useState<Load>({ state: "loading" });
   const [graph, setGraph] = useState<GraphData | null>(null);
-  const lastConfidence = useRef<number | undefined>(undefined);
-  const inFlight = useRef(false);
-
-  const fetchIncident = useCallback(async () => {
-    inFlight.current = true;
-    try {
-      const { incident, events } = await getIncident(id);
-      const top = incident.root_cause_candidates[0]?.confidence;
-      const trend = confidenceTrend(lastConfidence.current, top);
-      lastConfidence.current = top;
-      setLoad({ state: "ready", incident, events, trend });
-    } catch (err) {
-      if (err instanceof HttpError && err.status === 404) {
-        setLoad({ state: "notfound" });
-      } else {
-        // keep showing the last good copy if a refetch fails
-        const message = err instanceof Error ? err.message : String(err);
-        setLoad((prev) => (prev.state === "ready" ? prev : { state: "error", message }));
-      }
-    } finally {
-      inFlight.current = false;
-    }
-  }, [id]);
-
-  useEffect(() => {
-    lastConfidence.current = undefined;
-    setLoad({ state: "loading" });
-    void fetchIncident();
-  }, [fetchIncident]);
 
   useEffect(() => {
     let alive = true;
@@ -135,10 +109,65 @@ export default function IncidentPage() {
     };
   }, []);
 
+  return <IncidentView key={id} id={id} graph={graph} liveIncidents={live.incidents} />;
+}
+
+function IncidentView({
+  id,
+  graph,
+  liveIncidents,
+}: {
+  id: string;
+  graph: GraphData | null;
+  liveIncidents: Incident[];
+}) {
+  const [load, setLoad] = useState<Load>({ state: "loading" });
+  const lastConfidence = useRef<number | undefined>(undefined);
+  const inFlight = useRef(false);
+  const alive = useRef(true);
+  const latest = useRef(0);
+
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
+  const fetchIncident = useCallback(async () => {
+    const token = ++latest.current;
+    // results from an unmounted view or a superseded fetch are dropped
+    const current = () => alive.current && token === latest.current;
+    inFlight.current = true;
+    try {
+      const { incident, events } = await getIncident(id);
+      if (!current()) return;
+      const top = incident.root_cause_candidates[0]?.confidence;
+      const trend = confidenceTrend(lastConfidence.current, top);
+      lastConfidence.current = top;
+      setLoad({ state: "ready", incident, events, trend });
+    } catch (err) {
+      if (!current()) return;
+      if (err instanceof HttpError && err.status === 404) {
+        setLoad({ state: "notfound" });
+      } else {
+        // keep showing the last good copy if a refetch fails
+        const message = err instanceof Error ? err.message : String(err);
+        setLoad((prev) => (prev.state === "ready" ? prev : { state: "error", message }));
+      }
+    } finally {
+      if (token === latest.current) inFlight.current = false;
+    }
+  }, [id]);
+
+  useEffect(() => {
+    void fetchIncident();
+  }, [fetchIncident]);
+
   const loaded = load.state === "ready" ? load.incident : null;
   useEffect(() => {
-    if (!inFlight.current && needsRefetch(loaded, live.incidents)) void fetchIncident();
-  }, [loaded, live.incidents, fetchIncident]);
+    if (!inFlight.current && needsRefetch(loaded, liveIncidents)) void fetchIncident();
+  }, [loaded, liveIncidents, fetchIncident]);
 
   const replay = useReplay(loaded?.key_moments.length ?? 0);
   const layout = useMemo(() => (graph && loaded ? graphLayout(graph, loaded) : null), [graph, loaded]);

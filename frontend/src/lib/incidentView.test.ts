@@ -26,6 +26,9 @@ test("node tooltip counts events and first time", () => {
   expect(nodeTooltip("auth-service", events, start)).toBe("3 events, first at T+4s");
   expect(nodeTooltip("user-db", events, start)).toBe("1 events, first at T+0s");
   expect(nodeTooltip("gateway", events, start)).toBe("No events in this incident");
+  // compares instants, not ISO strings (11:00:03+01:00 is T+3s, earlier than 10:00:05Z)
+  const mixed = [ev("m1", "cache", "a", 5), { ...ev("m2", "cache", "b", 0), timestamp: "2026-11-09T11:00:03+01:00" }];
+  expect(nodeTooltip("cache", mixed, start)).toBe("2 events, first at T+3s");
 });
 
 test("edge label counts source events naming the target, case-insensitively", () => {
@@ -35,7 +38,7 @@ test("edge label counts source events naming the target, case-insensitively", ()
 
 const moments: KeyMoment[] = [
   { timestamp: start, service: "user-db", label: "first anomaly", event_id: "e1" },
-  { timestamp: start, service: "auth-service", label: "auth-service affected", event_id: "e2" },
+  { timestamp: "2026-11-09T10:00:04Z", service: "auth-service", label: "auth-service affected", event_id: "e2" },
 ];
 
 test("replay reveals services by their first-anomaly moment", () => {
@@ -43,9 +46,14 @@ test("replay reveals services by their first-anomaly moment", () => {
   expect(replayStatus("impacted", "auth-service", moments, 0)).toBe("healthy");
   expect(replayStatus("impacted", "auth-service", moments, 1)).toBe("impacted");
   expect(replayStatus("healthy", "gateway", moments, 1)).toBe("healthy");
-  // impacted service without a moment shows at the last moment
+  // impacted service without a moment or events shows at the last moment
   expect(replayStatus("impacted", "web", moments, 0)).toBe("healthy");
   expect(replayStatus("impacted", "web", moments, 1)).toBe("impacted");
+  // impacted service without a moment shows once its first event time is reached
+  const extra = [ev("c1", "cache", "slow", 3), ev("l1", "late", "slow", 10)];
+  expect(replayStatus("impacted", "cache", moments, 0, extra)).toBe("healthy");
+  expect(replayStatus("impacted", "cache", moments, 1, extra)).toBe("impacted");
+  expect(replayStatus("impacted", "late", moments, 1, extra)).toBe("healthy");
   // no replay running: base status
   expect(replayStatus("impacted", "auth-service", moments, null)).toBe("impacted");
 });

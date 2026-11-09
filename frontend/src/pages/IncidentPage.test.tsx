@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { vi, type Mock } from "vitest";
 import { useLive } from "../hooks/useLive";
 import { getIncident, HttpError } from "../lib/api";
@@ -138,4 +138,67 @@ test("replay reveals services moment by moment and disables the button while run
   });
   expect(screen.getByRole("button", { name: "Replay" })).toBeEnabled();
   vi.useRealTimers();
+});
+
+const other: Incident = { ...base, id: "inc-2", title: "Payments failing because bank-gateway timed out" };
+
+function GoToB() {
+  const navigate = useNavigate();
+  return <button onClick={() => navigate("/incidents/inc-2")}>go to B</button>;
+}
+
+function renderWithNav() {
+  return render(
+    <MemoryRouter initialEntries={["/incidents/inc-1"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <GoToB />
+      <Routes>
+        <Route path="/incidents/:id" element={<IncidentPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
+test("a late response for the previous incident does not overwrite the new one", async () => {
+  let resolveA!: (v: unknown) => void;
+  (getIncident as Mock).mockImplementation((id: string) =>
+    id === "inc-1"
+      ? new Promise((r) => {
+          resolveA = r;
+        })
+      : Promise.resolve({ incident: other, events: [] }),
+  );
+  renderWithNav();
+  fireEvent.click(screen.getByText("go to B"));
+  expect(await screen.findByRole("heading", { level: 1, name: other.title })).toBeInTheDocument();
+
+  await act(async () => {
+    resolveA({ incident: base, events: [] });
+  });
+  expect(screen.getByRole("heading", { level: 1, name: other.title })).toBeInTheDocument();
+  expect(screen.queryByText(base.title)).not.toBeInTheDocument();
+});
+
+test("navigating away resets replay and leaves no replay timer running", async () => {
+  (getIncident as Mock).mockImplementation((id: string) =>
+    Promise.resolve({ incident: id === "inc-1" ? base : other, events: [] }),
+  );
+  vi.useFakeTimers();
+  try {
+    renderWithNav();
+    await act(async () => {});
+    expect(screen.getByRole("heading", { level: 1, name: base.title })).toBeInTheDocument();
+    // baseline: the status line clock only
+    const baseline = vi.getTimerCount();
+    expect(baseline).toBe(1);
+    fireEvent.click(screen.getByRole("button", { name: "Replay" }));
+    expect(vi.getTimerCount()).toBe(baseline + 1);
+
+    fireEvent.click(screen.getByText("go to B"));
+    await act(async () => {});
+    expect(screen.getByRole("heading", { level: 1, name: other.title })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Replay" })).toBeEnabled();
+    expect(vi.getTimerCount()).toBe(baseline);
+  } finally {
+    vi.useRealTimers();
+  }
 });

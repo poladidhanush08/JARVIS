@@ -4,11 +4,13 @@ import type { Event, Incident, KeyMoment } from "./types";
 
 const names = (message: string, service: string) => message.toLowerCase().includes(service.toLowerCase());
 
+const firstEvent = (evs: Event[]) => evs.reduce((a, b) => (Date.parse(a.timestamp) <= Date.parse(b.timestamp) ? a : b));
+
 /** Tooltip for a graph node: how much this service contributed to the incident. */
 export function nodeTooltip(service: string, events: Event[], startIso: string): string {
   const own = events.filter((e) => e.service === service);
   if (own.length === 0) return "No events in this incident";
-  const first = own.reduce((a, b) => (a.timestamp <= b.timestamp ? a : b));
+  const first = firstEvent(own);
   return `${own.length} events, first at ${tPlus(first.timestamp, startIso)}`;
 }
 
@@ -21,13 +23,23 @@ export function edgeLabel(source: string, target: string, events: Event[]): stri
 /**
  * Status of a service while replay is at moment `index` (null = no replay running).
  * The root shows from moment 0; others once their first-anomaly moment is reached.
- * Affected services without a moment of their own appear at the last moment.
+ * Affected services without a moment of their own appear once their first incident event
+ * is at or before the current moment's time (or at the last moment if they have no events).
  */
-export function replayStatus(base: NodeStatus, service: string, moments: KeyMoment[], index: number | null): NodeStatus {
+export function replayStatus(
+  base: NodeStatus,
+  service: string,
+  moments: KeyMoment[],
+  index: number | null,
+  events: Event[] = [],
+): NodeStatus {
   if (index === null || base === "healthy" || base === "root") return base;
   const at = moments.findIndex((m) => m.service === service);
-  const revealAt = at === -1 ? moments.length - 1 : at;
-  return revealAt <= index ? base : "healthy";
+  if (at !== -1) return at <= index ? base : "healthy";
+  const own = events.filter((e) => e.service === service);
+  if (own.length === 0) return index >= moments.length - 1 ? base : "healthy";
+  const current = moments[Math.min(index, moments.length - 1)];
+  return current && Date.parse(firstEvent(own).timestamp) <= Date.parse(current.timestamp) ? base : "healthy";
 }
 
 export function confidenceTrend(previous: number | undefined, current: number | undefined): "rising" | "steady" {
@@ -78,7 +90,7 @@ export function graphElements(
   hoveredEdge: string | null,
 ): { nodes: FlowNode[]; edges: FlowEdge[] } {
   const status = new Map(
-    layout.nodes.map((n) => [n.id, replayStatus(n.status, n.id, incident.key_moments, replayIndex)]),
+    layout.nodes.map((n) => [n.id, replayStatus(n.status, n.id, incident.key_moments, replayIndex, events)]),
   );
   const nodes: FlowNode[] = layout.nodes.map((n) => ({
     id: n.id,

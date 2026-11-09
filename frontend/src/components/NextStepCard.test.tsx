@@ -44,3 +44,21 @@ test("copy button writes the command and confirms briefly", async () => {
   expect(screen.getByText("Copy")).toBeInTheDocument();
   vi.useRealTimers();
 });
+
+test("copy failure is shown briefly", async () => {
+  vi.useFakeTimers();
+  const writeText = vi.fn(() => Promise.reject(new Error("denied")));
+  Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+  render(<NextStepCard recommendations={recs} />);
+  fireEvent.click(screen.getByText("All 4 steps + verify checks"));
+
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: /Copy/ }));
+  });
+  expect(screen.getByText("Copy failed")).toBeInTheDocument();
+  act(() => {
+    vi.advanceTimersByTime(1600);
+  });
+  expect(screen.getByText("Copy")).toBeInTheDocument();
+  vi.useRealTimers();
+});

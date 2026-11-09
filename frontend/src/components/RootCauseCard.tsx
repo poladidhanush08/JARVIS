@@ -54,9 +54,7 @@ export default function RootCauseCard({
       <h2 className="text-label font-semibold text-muted">Root cause</h2>
       <p className="flex items-baseline gap-2 text-body font-semibold">
         <span aria-hidden="true" className="h-2 w-2 shrink-0 translate-y-[-1px] rounded-full bg-root" />
-        <span>
-          {candidate.service} — {phrase}
-        </span>
+        <span>{phrase ? `${candidate.service} — ${phrase}` : candidate.service}</span>
       </p>
       <p className="text-label text-muted">
         {confidenceLabel(candidate.confidence)} confidence, {candidate.confidence}%

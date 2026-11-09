@@ -25,3 +25,15 @@ test("root cause card shows verdict and confidence words", () => {
   expect(screen.getByRole("meter", { name: "graph" })).toHaveAttribute("aria-valuenow", "100");
   expect(screen.getByRole("meter", { name: "change" })).toHaveAttribute("aria-valuenow", "0");
 });
+
+test("verdict omits the dash when there is no cause phrase", () => {
+  render(
+    <RootCauseCard
+      candidate={{ service: "user-db", cause_type: "", confidence: 40, factors: {}, evidence: [] }}
+      phrase=""
+      runnerUp=""
+    />,
+  );
+  expect(screen.getByText("user-db")).toBeInTheDocument();
+  expect(screen.queryByText(/user-db —/)).not.toBeInTheDocument();
+});
