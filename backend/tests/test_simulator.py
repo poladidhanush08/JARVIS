@@ -46,11 +46,37 @@ async def test_runs_to_completion(sdir):
 
 async def test_start_twice_cancels_previous_without_duplicates(sdir):
     sim, engine, seen = make(sdir)
-    await sim.start("tiny", speed=10)
+    await sim.start("tiny", speed=1)
+    await asyncio.sleep(0.15)
+    assert 1 <= sim.status()["emitted"] < TOTAL
     await sim.start("tiny", speed=10)
     await wait_finished(sim)
+    ids = [e.id for e in engine.events()]
     assert sim.status()["emitted"] == sim.status()["total"] == TOTAL
-    assert len(engine.events()) == TOTAL
+    assert len(ids) == len(set(ids)) == TOTAL
+
+
+async def test_start_cancels_run_parked_in_on_events(sdir):
+    engine = Engine()
+    block = asyncio.Event()
+    parked = asyncio.Event()
+    calls = []
+
+    async def on_events(evs):
+        calls.append(evs[0].id)
+        if len(calls) == 1:
+            parked.set()
+            await block.wait()
+
+    sim = Simulator(engine, on_events, scenarios_dir=sdir)
+    await sim.start("tiny", speed=10)
+    await asyncio.wait_for(parked.wait(), 2)
+    await sim.start("tiny", speed=10)
+    block.set()
+    await wait_finished(sim)
+    ids = [e.id for e in engine.events()]
+    assert sim.status()["emitted"] == sim.status()["total"] == TOTAL
+    assert len(ids) == len(set(ids)) == TOTAL
 
 
 async def test_pause_stops_emission(sdir):
@@ -69,10 +95,30 @@ async def test_pause_stops_emission(sdir):
 
 
 async def test_reset_returns_to_idle(sdir):
-    sim, engine, _ = make(sdir)
+    sim, engine, seen = make(sdir)
     await sim.start("tiny", speed=1)
+    await asyncio.sleep(0.15)
+    assert sim.status()["emitted"] >= 1
     await sim.reset()
-    assert sim.status()["state"] == "idle" and engine.events() == []
+    n = len(seen)
+    await asyncio.sleep(0.3)
+    assert sim.status()["state"] == "idle" and sim.status()["emitted"] == 0
+    assert engine.events() == [] and len(seen) == n
+
+
+async def test_on_events_error_finishes_and_is_logged(sdir, caplog):
+    engine = Engine()
+
+    async def boom(evs):
+        raise RuntimeError("broadcast down")
+
+    sim = Simulator(engine, boom, scenarios_dir=sdir)
+    await sim.start("tiny", speed=10)
+    await wait_finished(sim)
+    assert "simulator run failed" in caplog.text
+    await sim.start("tiny", speed=10)
+    await wait_finished(sim)
+    await sim.reset()
 
 
 async def test_speed_clamped(sdir):
@@ -81,3 +127,9 @@ async def test_speed_clamped(sdir):
     assert sim.status()["speed"] == 10
     await sim.set_speed(0.1)
     assert sim.status()["speed"] == 1
+    for bad in (float("nan"), float("inf"), float("-inf")):
+        await sim.set_speed(bad)
+        assert sim.status()["speed"] == 1
+    await sim.start("tiny", speed=float("nan"))
+    assert sim.status()["speed"] == 1
+    await sim.reset()

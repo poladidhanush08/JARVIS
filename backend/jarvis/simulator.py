@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
+import math
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -12,6 +14,7 @@ from pydantic import BaseModel
 from jarvis.engine import Engine
 from jarvis.models import Event, Metric
 
+log = logging.getLogger(__name__)
 DEFAULT_DIR = Path(__file__).resolve().parent.parent / "data" / "scenarios"
 
 
@@ -73,6 +76,12 @@ def scenario_events(s: Scenario, start: datetime) -> list[Event]:
     return out
 
 
+def _clamp_speed(speed: float) -> float:
+    if not math.isfinite(speed):
+        return 1.0
+    return min(10.0, max(1.0, speed))
+
+
 class Simulator:
     def __init__(
         self,
@@ -103,7 +112,7 @@ class Simulator:
         scenario = load_scenario(scenario_id, self.scenarios_dir)
         await self._cancel()
         self.engine.reset()
-        self._speed = min(10.0, max(1.0, speed))
+        self._speed = _clamp_speed(speed)
         events = scenario_events(scenario, datetime.now(timezone.utc))
         self._scenario, self._emitted, self._total = scenario_id, 0, len(events)
         self._gate.set()
@@ -111,17 +120,20 @@ class Simulator:
         self._task = asyncio.create_task(self._run(events))
 
     async def _run(self, events: list[Event]) -> None:
-        prev = events[0].timestamp if events else None
-        for event in events:
-            await self._gate.wait()
-            delta = (event.timestamp - prev).total_seconds()
-            prev = event.timestamp
-            if delta > 0:
-                await asyncio.sleep(delta / self._speed)
-            await self._gate.wait()
-            self.engine.ingest([event])
-            self._emitted += 1
-            await self.on_events([event])
+        try:
+            prev = events[0].timestamp if events else None
+            for event in events:
+                await self._gate.wait()
+                delta = (event.timestamp - prev).total_seconds()
+                prev = event.timestamp
+                if delta > 0:
+                    await asyncio.sleep(delta / self._speed)
+                await self._gate.wait()
+                self.engine.ingest([event])
+                self._emitted += 1
+                await self.on_events([event])
+        except Exception:
+            log.exception("simulator run failed")
         self._state = "finished"
 
     async def pause(self) -> None:
@@ -141,7 +153,7 @@ class Simulator:
         self._scenario, self._state, self._emitted, self._total = None, "idle", 0, 0
 
     async def set_speed(self, speed: float) -> None:
-        self._speed = min(10.0, max(1.0, speed))
+        self._speed = _clamp_speed(speed)
 
     def status(self) -> dict:
         speed = int(self._speed) if self._speed == int(self._speed) else self._speed
