@@ -116,22 +116,120 @@ async def test_lru_uses_last_used_not_creation_order():
     assert await store.get(S1) is a
 
 
-async def test_eviction_cancels_simulator_and_closes_sockets():
+async def test_eviction_cancels_simulator():
     clock = FakeClock()
     store = WorkspaceStore(ttl_s=10, clock=clock)
     ws = await store.get(S1)
-    good, dead = FakeSocket(), FakeSocket(fail=True)
-    ws.hub.connections.update({good, dead})
     await ws.sim.start("a_db_pool", 10)
     await asyncio.sleep(0.05)
     assert len(ws.engine.events()) >= 1
     clock.t += 11
     await store.get(None)  # any request triggers the TTL check
+    assert S1 not in store.ids()
+    await store.drain()
     assert ws.sim.status()["state"] == "idle"
-    assert good.closed
-    assert ws.hub.connections == set()
     await asyncio.sleep(0.4)  # scenario A would emit more events by now if still running
     assert ws.engine.events() == []
+
+
+async def test_eviction_closes_sockets_even_failing_ones():
+    store = WorkspaceStore(max_workspaces=1)
+    ws = await store.get(S1)
+    good, dead = FakeSocket(), FakeSocket(fail=True)
+    ws.hub.connections.update({good, dead})
+    await store.get(S2)  # every candidate is connected, so the LRU one goes anyway
+    await store.drain()
+    assert good.closed
+    assert ws.hub.connections == set()
+
+
+async def test_connected_silent_workspace_survives_ttl():
+    clock = FakeClock()
+    store = WorkspaceStore(ttl_s=10, clock=clock)
+    watched = await store.get(S1)
+    watched.hub.connections.add(FakeSocket())  # an open dashboard that never sends frames
+    await store.get(S2)
+    clock.t += 1000
+    await store.get(None)
+    assert S1 in store.ids() and S2 not in store.ids()
+    assert await store.get(S1) is watched
+    watched.hub.connections.clear()  # once the dashboard closes, the TTL applies again
+    clock.t += 11
+    await store.get(None)
+    assert S1 not in store.ids()
+    await store.drain()
+
+
+async def test_lru_skips_connected_workspaces():
+    clock = FakeClock()
+    store = WorkspaceStore(max_workspaces=3, clock=clock)
+    await store.get(None)
+    oldest = await store.get(S1)
+    oldest.hub.connections.add(FakeSocket())
+    clock.t += 1
+    await store.get(S2)
+    clock.t += 1
+    await store.get("session-three-3333")  # full: S1 is older but connected, so S2 goes
+    assert set(store.ids()) == {"default", S1, "session-three-3333"}
+    await store.drain()
+
+
+async def test_cleanup_survives_cancelled_request():
+    store = WorkspaceStore(max_workspaces=1)
+    ws = await store.get(S1)
+    blocker = asyncio.Event()
+
+    class SlowSocket(FakeSocket):
+        async def close(self, code: int = 1000) -> None:
+            await blocker.wait()
+            self.closed = True
+
+    slow = SlowSocket()
+    ws.hub.connections.add(slow)
+    request = asyncio.create_task(store.get(S2))
+    await asyncio.wait_for(request, 1)  # returns without waiting for the cleanup
+    request.cancel()
+    blocker.set()
+    await store.drain()
+    assert slow.closed and ws.sim.status()["state"] == "idle"
+
+
+class GatedSocket(FakeSocket):
+    """A socket whose first send (the snapshot) waits until released."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.release = asyncio.Event()
+
+    async def accept(self) -> None:
+        pass
+
+    async def send_json(self, msg: dict) -> None:
+        if not self.sent:
+            await self.release.wait()
+        self.sent.append(msg)
+
+
+async def test_socket_mid_snapshot_is_closed_by_close_all_and_gets_snapshot_first():
+    ws = await WorkspaceStore().get(S1)
+    sock = GatedSocket()
+    connecting = asyncio.create_task(ws.hub.connect(sock))
+    await asyncio.sleep(0)
+    assert sock in ws.hub.connections
+    await ws.hub.broadcast([])  # skipped: its snapshot is not out yet
+    await ws.hub.close_all()
+    assert sock.closed
+    sock.release.set()
+    await connecting
+    assert [m["type"] for m in sock.sent] == ["snapshot"]
+    assert ws.hub.connections == set()
+
+
+async def test_workspaces_share_loaded_graph_and_playbook():
+    store = WorkspaceStore()
+    a, b = await store.get(S1), await store.get(S2)
+    assert a.engine.graph is b.engine.graph is store.graph
+    assert a.engine.playbook is b.engine.playbook is store.playbook
 
 
 # ---- API ----------------------------------------------------------------------------------
@@ -230,7 +328,7 @@ def test_graph_and_scenarios_create_no_workspace(client):
     assert S1 not in store.ids()
 
 
-def test_eviction_closes_live_websocket(client):
+def test_connected_websocket_survives_ttl_but_lru_closes_it(client):
     from starlette.websockets import WebSocketDisconnect
 
     store = client.app.state.workspaces
@@ -238,9 +336,11 @@ def test_eviction_closes_live_websocket(client):
     store.clock = clock
     with client.websocket_connect(f"/ws?session={S1}") as ws:
         ws.receive_json()
-        assert S1 in store.ids()
         clock.t += WORKSPACE_TTL_S + 1
-        client.get("/api/stats")  # any request runs the TTL check
+        client.get("/api/stats")  # TTL check runs, but an open dashboard keeps S1 alive
+        assert S1 in store.ids()
+        store.max_workspaces = 2  # default + S1: a new visitor forces S1 out
+        client.get("/api/stats", headers=hdr(S2))
         assert S1 not in store.ids()
         with pytest.raises(WebSocketDisconnect):
             ws.receive_json()

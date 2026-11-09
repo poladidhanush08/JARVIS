@@ -14,6 +14,7 @@ from jarvis.engine import utcnow
 from jarvis.graph import ServiceGraph
 from jarvis.models import Event, Metric
 from jarvis.parsers import parse_log_file
+from jarvis.playbook import Playbook
 from jarvis.report import render_markdown
 from jarvis.simulator import list_scenarios
 from jarvis.workspaces import Hub, Workspace, WorkspaceStore
@@ -29,6 +30,11 @@ CORS_ORIGINS = [
     o.strip() for o in os.environ.get("JARVIS_CORS_ORIGINS", "http://localhost:5173").split(",") if o.strip()
 ]
 CORS_ORIGIN_REGEX = os.environ.get("JARVIS_CORS_ORIGIN_REGEX", r"https://.*\.vercel\.app") or None
+
+# Memory caps: one visitor must not be able to exhaust the (small) server.
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+MAX_EVENTS_PER_REQUEST = 5_000
+MAX_WORKSPACE_EVENTS = 50_000
 
 
 class EventIn(BaseModel):
@@ -60,8 +66,8 @@ class SpeedBody(BaseModel):
 
 
 def create_app() -> FastAPI:
-    store = WorkspaceStore()
     graph = ServiceGraph.default()
+    store = WorkspaceStore(graph=graph, playbook=Playbook.default())
 
     app = FastAPI(title="J.A.R.V.I.S.")
     app.add_middleware(
@@ -87,6 +93,8 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     async def ingest(w: Workspace, events: list[Event]) -> int:
+        if w.engine.event_count() + len(events) > MAX_WORKSPACE_EVENTS:
+            raise HTTPException(413, "Workspace is full; reset it to continue")
         w.engine.ingest(events)
         await w.hub.broadcast(events)
         return len(events)
@@ -94,11 +102,16 @@ def create_app() -> FastAPI:
     @app.post("/api/events")
     async def post_events(body: EventIn | list[EventIn], w: Workspace = WS) -> dict:
         items = body if isinstance(body, list) else [body]
+        if len(items) > MAX_EVENTS_PER_REQUEST:
+            raise HTTPException(413, f"Too many events in one request (max {MAX_EVENTS_PER_REQUEST:,})")
         return {"accepted": await ingest(w, [i.to_event() for i in items])}
 
     @app.post("/api/upload")
     async def upload(file: UploadFile = File(...), w: Workspace = WS) -> dict:
-        content = (await file.read()).decode("utf-8", errors="replace")
+        raw = await file.read(MAX_UPLOAD_BYTES + 1)
+        if len(raw) > MAX_UPLOAD_BYTES:
+            raise HTTPException(413, "File too large (max 5 MB)")
+        content = raw.decode("utf-8", errors="replace")
         try:
             result = parse_log_file(content, file.filename or "")
         except Exception as exc:
@@ -208,8 +221,8 @@ def create_app() -> FastAPI:
     @app.websocket("/ws")
     async def ws_endpoint(ws: WebSocket) -> None:
         w = await store.get(ws.query_params.get("session"))
-        await w.hub.connect(ws)
         try:
+            await w.hub.connect(ws)
             while True:
                 await ws.receive_text()
                 store.touch(w)

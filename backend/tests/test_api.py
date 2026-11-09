@@ -188,3 +188,52 @@ def test_session_header_isolates_events(client):
     assert client.get("/api/stats", headers={"X-Jarvis-Session": "visitor-aaaa-1111"}).json()["raw_alerts"] == 3
     assert client.get("/api/stats", headers={"X-Jarvis-Session": "visitor-bbbb-2222"}).json()["raw_alerts"] == 0
     assert client.get("/api/stats").json()["raw_alerts"] == 0
+
+
+SAMPLES = __import__("pathlib").Path(__file__).resolve().parents[2] / "samples" / "logs"
+
+
+def test_upload_over_5mb_is_413(client):
+    big = b"x" * (5 * 1024 * 1024 + 1)
+    r = client.post("/api/upload", files={"file": ("big.log", big)})
+    assert r.status_code == 413
+    assert r.json()["detail"] == "File too large (max 5 MB)"
+    assert client.get("/api/stats").json()["raw_alerts"] == 0
+
+
+def test_upload_exactly_5mb_is_accepted(client):
+    r = client.post("/api/upload", files={"file": ("ok.log", b"x" * (5 * 1024 * 1024))})
+    assert r.status_code == 200
+
+
+def test_5000_event_sample_still_uploads(client):
+    path = SAMPLES / "14-load-5000.jsonl"
+    r = client.post("/api/upload", files={"file": (path.name, path.read_bytes())})
+    assert r.status_code == 200
+    assert r.json()["accepted"] == 5000
+
+
+def test_post_more_than_5000_events_is_413(client):
+    evs = [{"service": "user-db", "message": f"m{i}"} for i in range(5001)]
+    assert client.post("/api/events", json=evs).status_code == 413
+    assert client.get("/api/events").json() == []
+    assert client.post("/api/events", json=evs[:5000]).json() == {"accepted": 5000}
+
+
+def test_workspace_event_cap_is_413(client, monkeypatch):
+    import jarvis.api
+
+    monkeypatch.setattr(jarvis.api, "MAX_WORKSPACE_EVENTS", 4)
+    assert client.post("/api/events", json=DB_EVENTS).json() == {"accepted": 3}
+    r = client.post("/api/events", json=DB_EVENTS[:2])
+    assert r.status_code == 413
+    assert r.json()["detail"] == "Workspace is full; reset it to continue"
+    assert client.post("/api/events", json=DB_EVENTS[:1]).status_code == 200  # 4 fits exactly
+    client.post("/api/simulator/reset")
+    assert client.post("/api/events", json=DB_EVENTS).status_code == 200
+
+
+def test_cap_constants():
+    import jarvis.api as api
+
+    assert (api.MAX_UPLOAD_BYTES, api.MAX_EVENTS_PER_REQUEST, api.MAX_WORKSPACE_EVENTS) == (5 * 1024 * 1024, 5000, 50000)

@@ -98,6 +98,9 @@ class Engine:
         ]
         return sorted(out, key=lambda e: e.timestamp)
 
+    def event_count(self) -> int:
+        return len(self._events)
+
     def event_incident(self, event_id: str) -> str | None:
         return self._event_incident.get(event_id)
 
