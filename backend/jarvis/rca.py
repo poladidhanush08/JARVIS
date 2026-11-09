@@ -83,9 +83,8 @@ def runner_up_note(
     mine = [e for e in anomalous if e.service == run.service]
     if mine:
         msgs = [e.message for e in mine]
-        top_named = _named_services(_most_common(msgs), run.service, known)
-        if top_named:
-            counts = Counter(o for m in msgs for o in _named_services(m, run.service, known) if o in top_named)
+        counts = Counter(o for m in msgs for o in _named_services(m, run.service, known))
+        if counts:
             return f"{run.service} ranked lower: its errors point at {counts.most_common(1)[0][0]}"
     top_first = min((e.timestamp for e in anomalous if e.service == top.service), default=None)
     run_first = min((e.timestamp for e in mine), default=None)

@@ -63,3 +63,12 @@ def test_unknown_service_mixed_with_known_services():
     assert c["staging-host-3"].factors["graph"] == 0
     assert c["user-db"].factors["graph"] == (1 if g.depends_on("auth-service", "user-db") else 0) / 2
     assert c["user-db"].factors["graph"] > 0
+
+
+def test_runner_up_points_at_most_named_service_overall():
+    evs = [ev(0, "user-db", "pool exhausted", "warn")]
+    evs += [ev(5 + i, "payment-service", "bank-gateway err") for i in range(3)]
+    evs += [ev(10 + i, "payment-service", f"user-db err {i}") for i in range(4)]
+    c = rank_root_causes(evs, evs, ServiceGraph.default())
+    assert c[1].service == "payment-service"
+    assert runner_up_note(c, evs) == "payment-service ranked lower: its errors point at user-db"
