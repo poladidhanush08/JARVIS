@@ -8,8 +8,25 @@ import { useLive } from "../hooks/useLive";
 const LIMIT = 500;
 const REFETCH_MS = 2000;
 
+/** Level badge: colour carries status (error red, warn amber, info grey) and the word is always shown. */
+const LEVEL_STYLE: Record<string, string> = {
+  critical: "border-root/40 bg-root/12 text-root",
+  error: "border-root/40 bg-root/12 text-root",
+  warn: "border-impacted/40 bg-impacted/12 text-impacted",
+};
+
+function LevelBadge({ level }: { level: string }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-wide ${LEVEL_STYLE[level] ?? "border-line bg-surface-2 text-muted"}`}
+    >
+      {level}
+    </span>
+  );
+}
+
 const fieldCls =
-  "rounded-md border border-line bg-surface px-2 py-1 text-body text-ink focus-visible:outline-2 focus-visible:outline-accent";
+  "rounded-lg border border-line bg-surface px-2 py-1.5 text-body text-ink focus-visible:outline-2 focus-visible:outline-accent";
 
 export default function EventsPage() {
   const { recentEvents } = useLive();
@@ -81,8 +98,13 @@ export default function EventsPage() {
   const closeSheet = useCallback(() => setSelectedId(null), []);
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-4">
-      <h1 className="text-headline font-semibold">Events</h1>
+    <div className="mx-auto flex max-w-6xl flex-col gap-6">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-headline font-semibold tracking-tight">Events</h1>
+        <p className="text-label text-muted">
+          Every event received. Click a row to see which incident it joined and why, or why it was excluded.
+        </p>
+      </div>
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-1 text-label text-muted">
           Service
@@ -114,9 +136,9 @@ export default function EventsPage() {
         </label>
       </div>
       {error && <p className="text-body text-muted">Could not load events. Showing what is available.</p>}
-      <div className="overflow-x-auto rounded-lg border border-line bg-surface">
+      <div className="overflow-x-auto rounded-xl border border-line bg-surface">
         <table className="w-full min-w-[640px] text-left text-label">
-          <thead className="text-muted">
+          <thead className="text-muted uppercase tracking-wide">
             <tr className="border-b border-line">
               <th className="px-3 py-2 font-semibold">Time</th>
               <th className="px-3 py-2 font-semibold">Service</th>
@@ -127,18 +149,26 @@ export default function EventsPage() {
           </thead>
           <tbody>
             {shown.map((r) => (
-              <tr key={r.event.id} className="border-b border-line last:border-0 hover:bg-canvas">
-                <td className="whitespace-nowrap px-3 py-2 tabular-nums">
+              <tr
+                key={r.event.id}
+                onClick={() => setSelectedId(r.event.id)}
+                aria-selected={selectedId === r.event.id}
+                className={`cursor-pointer border-b border-line transition-colors duration-150 last:border-0 hover:bg-surface-2 ${selectedId === r.event.id ? "bg-surface-2" : ""}`}
+              >
+                <td className="whitespace-nowrap px-3 py-2 tabular-nums text-muted">
                   {new Date(r.event.timestamp).toLocaleTimeString()}
                 </td>
-                <td className="px-3 py-2">{r.event.service}</td>
+                <td className="whitespace-nowrap px-3 py-2 font-mono">{r.event.service}</td>
                 <td className="px-3 py-2">
-                  <span className="rounded-md border border-line px-1.5 py-0.5">{r.event.level}</span>
+                  <LevelBadge level={r.event.level} />
                 </td>
                 <td className="px-3 py-2">
                   <button
                     type="button"
-                    onClick={() => setSelectedId(r.event.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedId(r.event.id);
+                    }}
                     className="text-left hover:text-accent hover:underline focus-visible:outline-2 focus-visible:outline-accent"
                   >
                     {r.event.message}
@@ -146,11 +176,15 @@ export default function EventsPage() {
                 </td>
                 <td className="whitespace-nowrap px-3 py-2">
                   {r.incident_id ? (
-                    <Link to={`/incidents/${r.incident_id}`} className="text-accent hover:underline">
+                    <Link
+                      to={`/incidents/${r.incident_id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="font-mono text-accent hover:underline"
+                    >
                       {r.incident_id}
                     </Link>
                   ) : (
-                    "—"
+                    <span className="text-muted">—</span>
                   )}
                 </td>
               </tr>

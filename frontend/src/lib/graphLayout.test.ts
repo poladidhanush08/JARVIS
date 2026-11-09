@@ -26,6 +26,6 @@ test("layout marks root, impacted, healthy and active edges", () => {
   expect(l.edges.find((e) => e.target === "order-service")!.active).toBe(false);
   expect(l.edges.find((e) => e.target === "user-db")!.active).toBe(true);
   expect(l.nodes.find((n) => n.id === "user-db")!.y).toBe(300);
-  expect(l.nodes.find((n) => n.id === "auth-service")!.x).toBe(-80);
-  expect(l.nodes.find((n) => n.id === "order-service")!.x).toBe(80);
+  expect(l.nodes.find((n) => n.id === "auth-service")!.x).toBe(-100);
+  expect(l.nodes.find((n) => n.id === "order-service")!.x).toBe(100);
 });

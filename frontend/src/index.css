@@ -1,29 +1,19 @@
 @import "tailwindcss";
 
+/* Dark is the only theme: the incident console is designed for a dark room. */
 :root {
-  --ink: #14161a;
-  --muted: #5d6572;
-  --line: #e2e5ea;
-  --surface: #ffffff;
-  --canvas: #f5f6f8;
-  --accent: #2563eb;
-  --root: #dc2626;
-  --impacted: #d97706;
-  --healthy: #8a919c;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --ink: #e8eaee;
-    --muted: #9aa3b0;
-    --line: #2b3038;
-    --surface: #181b20;
-    --canvas: #0f1114;
-    --accent: #60a5fa;
-    --root: #f87171;
-    --impacted: #fbbf24;
-    --healthy: #7a828d;
-  }
+  color-scheme: dark;
+  --ink: #e6e8eb;
+  --muted: #8b93a1;
+  --line: #232830;
+  --surface: #12151a;
+  --surface-2: #181c22;
+  --canvas: #0b0d10;
+  --accent: #3b82f6;
+  --root: #ef4444;
+  --impacted: #f59e0b;
+  --recovered: #22c55e;
+  --healthy: #5b6270;
 }
 
 @theme {
@@ -31,23 +21,118 @@
   --color-muted: var(--muted);
   --color-line: var(--line);
   --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
   --color-canvas: var(--canvas);
   --color-accent: var(--accent);
   --color-root: var(--root);
   --color-impacted: var(--impacted);
+  --color-recovered: var(--recovered);
   --color-healthy: var(--healthy);
   --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
-  --text-body: 15px;
   --text-label: 13px;
-  --text-headline: 24px;
+  --text-body: 15px;
+  --text-title: 20px;
+  --text-headline: 28px;
+  --text-hero: 64px;
 }
 
 body {
   margin: 0;
-  background: var(--canvas);
+  background-color: var(--canvas);
+  /* faint dot grid on the canvas only; cards are opaque */
+  background-image: radial-gradient(circle at 1px 1px, rgb(255 255 255 / 0.045) 1px, transparent 0);
+  background-size: 24px 24px;
   color: var(--ink);
   font-size: 15px;
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Soft pulse on the root-cause node: the only thing that loops at rest. */
+@keyframes root-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(239 68 68 / 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgb(239 68 68 / 0);
+  }
+}
+.root-pulse {
+  animation: root-pulse 2.4s ease-out infinite;
+}
+
+/* One sweep of light around the root-cause card's border, played once on mount. */
+@property --sweep {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes border-sweep {
+  0% {
+    --sweep: 0deg;
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    --sweep: 360deg;
+    opacity: 0;
+  }
+}
+.border-light {
+  position: relative;
+}
+.border-light::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(from var(--sweep), transparent 0deg, transparent 280deg, var(--root) 340deg, transparent 360deg);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0;
+  animation: border-sweep 1.8s ease-out 0.2s 1 forwards;
+}
+
+/* Excluded alerts fade to grey and step aside. */
+@keyframes step-aside {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+    filter: grayscale(0);
+  }
+  to {
+    opacity: 0.55;
+    transform: translateX(8px);
+    filter: grayscale(1);
+  }
+}
+.step-aside {
+  animation: step-aside 300ms ease-out forwards;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.react-flow__attribution {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -58,5 +143,16 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
   }
 }

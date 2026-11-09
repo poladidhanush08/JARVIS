@@ -174,6 +174,9 @@ test("the pending window follows client arrival time, not the event timestamp", 
   expect(cards()).toHaveLength(1);
   advance(11_000);
   expect(cards()).toHaveLength(0);
+  // it never joined an incident: it stays, greyed, labelled excluded
+  expect(screen.getAllByTestId("excluded-card")).toHaveLength(1);
+  expect(screen.getByText("excluded")).toBeInTheDocument();
 });
 
 test("the expiry tick runs only while cards are pending", () => {

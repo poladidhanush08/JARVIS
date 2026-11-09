@@ -18,7 +18,7 @@ export interface LayoutEdge {
 }
 
 const ROW_Y: Record<string, number> = { frontend: 0, gateway: 100, service: 200, datastore: 300, external: 300 };
-const COL_GAP = 160;
+const COL_GAP = 200;
 
 export function graphLayout(graph: GraphData, incident?: Incident): { nodes: LayoutNode[]; edges: LayoutEdge[] } {
   const root = incident?.root_cause_candidates[0]?.service;

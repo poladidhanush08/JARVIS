@@ -103,7 +103,7 @@ test("renders the answer first and refetches when the live copy changes", async 
   expect(screen.getByText(/confidence steady/)).toBeInTheDocument();
   expect(screen.getByText("user-db — ran out of connections")).toBeInTheDocument();
   expect(screen.getByTitle("sum of failed_logins metrics")).toHaveTextContent("1,200");
-  expect(screen.getByRole("link", { name: /Download report/ })).toHaveAttribute("href", "/api/incidents/inc-1/report");
+  expect(screen.getByRole("button", { name: /Export report/ })).toBeInTheDocument();
 
   const newer: Incident = {
     ...base,
@@ -263,13 +263,38 @@ test("'updated' uses the engine's wall-clock updated_at; numbers explain themsel
   (getIncident as Mock).mockResolvedValue({ incident, events: [] });
   renderPage();
   expect(await screen.findByText(/updated 4 s ago/)).toBeInTheDocument();
-  expect(screen.getByText("Endpoints: /login, /pay")).toBeInTheDocument();
-  expect(screen.getByText(/confidence, 70%/)).toHaveAttribute("title", expect.stringContaining("0.35 × came first"));
+  expect(screen.getByText("/login")).toBeInTheDocument();
+  expect(screen.getByText("/pay")).toBeInTheDocument();
+  expect(screen.getByText("Medium, 70%")).toHaveAttribute("title", expect.stringContaining("0.35 × came first"));
   expect(screen.getAllByTitle("seconds after the incident's first anomaly")).toHaveLength(2);
   // the red dot follows the top root-cause candidate (user-db), not the first moment
   const dots = screen
     .getByRole("region", { name: "Key moments" })
-    .querySelectorAll("li > span:nth-child(2) > span:first-child");
+    .querySelectorAll("[data-dot]");
   expect(dots[0].className).toContain("bg-impacted");
   expect(dots[1].className).toContain("bg-root");
+});
+
+test("clicking a key moment shows the graph up to that moment; clicking again returns to live", async () => {
+  (getIncident as Mock).mockResolvedValue({ incident: base, events: [] });
+  renderPage();
+  await screen.findByText("auth-service", { selector: "li" });
+  fireEvent.click(screen.getByRole("button", { name: /user-db: first anomaly/ }));
+  expect(screen.getByText("auth-service", { selector: "li" })).toHaveAttribute("data-status", "healthy");
+  expect(screen.getByText("user-db", { selector: "li" })).toHaveAttribute("data-status", "root");
+  fireEvent.click(screen.getByRole("button", { name: /user-db: first anomaly/ }));
+  expect(screen.getByText("auth-service", { selector: "li" })).toHaveAttribute("data-status", "impacted");
+});
+
+test("export report downloads Markdown built in the browser", async () => {
+  (getIncident as Mock).mockResolvedValue({ incident: base, events: [] });
+  const createObjectURL = vi.fn(() => "blob:report");
+  const revokeObjectURL = vi.fn();
+  Object.assign(URL, { createObjectURL, revokeObjectURL });
+  const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: /Export report/ }));
+  expect(createObjectURL).toHaveBeenCalledTimes(1);
+  expect(click).toHaveBeenCalledTimes(1);
+  click.mockRestore();
 });

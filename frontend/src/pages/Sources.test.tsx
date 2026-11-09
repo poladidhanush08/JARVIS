@@ -14,6 +14,13 @@ vi.mock("../lib/api", async (orig) => ({
     ]),
   ),
   uploadLog: vi.fn(),
+  getEvents: vi.fn(() =>
+    Promise.resolve([
+      { event: { id: "a", source: "simulator" }, incident_id: null, reasons: [] },
+      { event: { id: "b", source: "simulator" }, incident_id: null, reasons: [] },
+      { event: { id: "c", source: "api" }, incident_id: null, reasons: [] },
+    ]),
+  ),
   simulator: {
     start: vi.fn(),
     pause: vi.fn(),
@@ -78,7 +85,7 @@ test("running shows Pause and Reset; paused shows Resume and Reset", async () =>
 test("seeds speed and scenario from a running server state", async () => {
   await renderWith(st({ state: "running", scenario: "s2", speed: 5, total: 10 }));
   expect(screen.getByRole("button", { name: "5x" })).toHaveAttribute("aria-pressed", "true");
-  expect(screen.getByRole("combobox")).toHaveValue("s2");
+  expect(screen.getByRole("radio", { name: /Cache storm/ })).toHaveAttribute("aria-checked", "true");
 });
 
 test("polls every second while running, stops when finished and on unmount", async () => {
@@ -177,7 +184,7 @@ test("upload failure shows the HttpError message inline", async () => {
 
 test("finished keeps the last scenario and speed and offers Play and Reset", async () => {
   await renderWith(st({ state: "finished", scenario: "s2", speed: 10, emitted: 14, total: 14 }));
-  expect(screen.getByRole("combobox")).toHaveValue("s2");
+  expect(screen.getByRole("radio", { name: /Cache storm/ })).toHaveAttribute("aria-checked", "true");
   expect(screen.getByRole("button", { name: "10x" })).toHaveAttribute("aria-pressed", "true");
   expect(has("Play") && has("Reset")).toBe(true);
   expect(has("Pause") || has("Resume")).toBe(false);
@@ -198,4 +205,13 @@ test("Play starts the scenario and goes to Incidents; a failed start stays on So
   });
   expect(simulator.start).toHaveBeenLastCalledWith("s1", 1);
   expect(screen.getByText("incidents page")).toBeInTheDocument();
+});
+
+test("scenario cards are lettered and each source shows its events-received counter", async () => {
+  await renderWith(st({}));
+  expect(screen.getByRole("radio", { name: /Checkout outage/ })).toHaveAttribute("aria-checked", "true");
+  fireEvent.click(screen.getByRole("radio", { name: /Cache storm/ }));
+  expect(screen.getByRole("radio", { name: /Cache storm/ })).toHaveAttribute("aria-checked", "true");
+  const counters = screen.getAllByText("events received").map((el) => el.previousElementSibling?.textContent);
+  expect(counters).toEqual(["2", "0", "1"]);
 });

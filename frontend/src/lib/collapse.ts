@@ -40,3 +40,21 @@ export function collapseStagger(count: number, durationMs: number, totalMs = 200
   if (count <= 1) return 0;
   return Math.max(0, Math.min(capMs, Math.floor((totalMs - durationMs) / (count - 1))));
 }
+
+/**
+ * Anomalous events that waited past the window without joining any incident: shown greyed as
+ * "excluded" (newest first, at most `max`). They drop out if a later incident absorbs them.
+ */
+export function excludedEvents(
+  events: Event[],
+  incidents: Incident[],
+  now: Date = new Date(),
+  receivedAt: ReadonlyMap<string, number> = new Map(),
+  windowMs: number = PENDING_WINDOW_MS,
+  max = 5,
+): Event[] {
+  const grouped = new Set(incidents.flatMap((i) => i.event_ids));
+  const cutoff = now.getTime() - windowMs;
+  const at = (e: Event) => receivedAt.get(e.id) ?? new Date(e.timestamp).getTime();
+  return events.filter((e) => isAnomalous(e) && !grouped.has(e.id) && at(e) < cutoff).slice(0, max);
+}

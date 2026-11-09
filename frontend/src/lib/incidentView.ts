@@ -120,3 +120,14 @@ export function graphElements(
   });
   return { nodes, edges };
 }
+
+/** Up to `max` distinct messages from `source` that name `target`: the evidence behind an edge. */
+export function edgeEvidence(source: string, target: string, events: Event[], max = 2): string[] {
+  const out: string[] = [];
+  for (const e of events) {
+    if (e.service !== source || !names(e.message, target) || out.includes(e.message)) continue;
+    out.push(e.message);
+    if (out.length >= max) break;
+  }
+  return out;
+}

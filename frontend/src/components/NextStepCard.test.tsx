@@ -18,7 +18,7 @@ test("next step card shows two steps then expands", () => {
   expect(screen.queryByText("Action 3")).not.toBeInTheDocument();
   expect(screen.queryByText(/Verify:/)).not.toBeInTheDocument();
 
-  fireEvent.click(screen.getByText("All 4 steps + verify checks"));
+  fireEvent.click(screen.getByText("Show all 4 steps + verify checks"));
   for (const n of [1, 2, 3, 4]) expect(screen.getByText(`Action ${n}`)).toBeInTheDocument();
   expect(screen.getByText("Effect 3")).toBeInTheDocument();
   expect(screen.getAllByText(/Verify:/)).toHaveLength(4);
@@ -30,7 +30,7 @@ test("copy button writes the command and confirms briefly", async () => {
   const writeText = vi.fn(() => Promise.resolve());
   Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
   render(<NextStepCard recommendations={recs} />);
-  fireEvent.click(screen.getByText("All 4 steps + verify checks"));
+  fireEvent.click(screen.getByText("Show all 4 steps + verify checks"));
 
   await act(async () => {
     fireEvent.click(screen.getByRole("button", { name: /Copy/ }));
@@ -50,7 +50,7 @@ test("copy failure is shown briefly", async () => {
   const writeText = vi.fn(() => Promise.reject(new Error("denied")));
   Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
   render(<NextStepCard recommendations={recs} />);
-  fireEvent.click(screen.getByText("All 4 steps + verify checks"));
+  fireEvent.click(screen.getByText("Show all 4 steps + verify checks"));
 
   await act(async () => {
     fireEvent.click(screen.getByRole("button", { name: /Copy/ }));

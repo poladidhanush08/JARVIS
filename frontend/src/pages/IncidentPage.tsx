@@ -1,4 +1,4 @@
-import { ArrowLeft, FileDown } from "lucide-react";
+import { ArrowLeft, FileDown, Play } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import AffectedGraph from "../components/AffectedGraph";
@@ -9,10 +9,11 @@ import NextStepCard from "../components/NextStepCard";
 import RootCauseCard from "../components/RootCauseCard";
 import SeverityBadge from "../components/SeverityBadge";
 import { useLive } from "../hooks/useLive";
-import { getGraph, getIncident, HttpError, reportUrl } from "../lib/api";
-import { relativeTime } from "../lib/format";
+import { getGraph, getIncident, HttpError } from "../lib/api";
+import { relativeTime, tPlus } from "../lib/format";
 import { graphLayout } from "../lib/graphLayout";
 import { confidenceTrend, needsRefetch } from "../lib/incidentView";
+import { buildReport, reportFileName } from "../lib/report";
 import type { Event, GraphData, Incident } from "../lib/types";
 
 const REPLAY_STEP_MS = 700;
@@ -37,6 +38,19 @@ function StatusLine({ incident, trend }: { incident: Incident; trend: Trend }) {
       {relativeTime(incident.updated_at ?? incident.last_event_time, now)}
     </p>
   );
+}
+
+/** Builds the Markdown report in the browser and saves it (works offline). */
+function downloadReport(incident: Incident) {
+  const blob = new Blob([buildReport(incident)], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = reportFileName(incident);
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 function BackLink() {
@@ -79,7 +93,7 @@ function useReplay(steps: number) {
 function Unavailable({ title, detail }: { title: string; detail: string }) {
   return (
     <div className="mx-auto flex max-w-xl flex-col items-center gap-4 py-16 text-center">
-      <h1 className="text-headline font-semibold">{title}</h1>
+      <h1 className="text-headline font-semibold tracking-tight">{title}</h1>
       <p className="text-body text-muted">{detail}</p>
       <BackLink />
     </div>
@@ -172,7 +186,8 @@ function IncidentView({
     wasLive.current = liveIncidents.some((i) => i.id === id);
   }, [id, loaded, liveIncidents, fetchIncident]);
 
-  const replay = useReplay(loaded?.key_moments.length ?? 0);
+  const replay = useReplay(Math.min(loaded?.key_moments.length ?? 0, 6));
+  const [selected, setSelected] = useState<number | null>(null);
   const layout = useMemo(() => (graph && loaded ? graphLayout(graph, loaded) : null), [graph, loaded]);
 
   if (load.state === "loading") return <p className="text-body text-muted">Loading incident…</p>;
@@ -183,61 +198,93 @@ function IncidentView({
 
   const { incident, events, trend } = load;
   const top = incident.root_cause_candidates[0];
+  const graphIndex = replay.index ?? selected;
 
   return (
-    <div className="mx-auto flex max-w-screen-2xl flex-col gap-4">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-w-0 flex-col gap-1">
+    <div className="mx-auto flex max-w-screen-2xl flex-col gap-4 lg:h-[calc(100vh-48px)] lg:overflow-hidden">
+      <header className="flex shrink-0 flex-wrap items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-col gap-1.5">
           <BackLink />
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <h1 className="min-w-0 break-words text-headline font-semibold">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <SeverityBadge severity={incident.severity} />
+            <h1 className="min-w-0 break-words text-headline font-semibold leading-tight tracking-tight">
               {incident.title || `Incident ${incident.id}`}
             </h1>
-            <SeverityBadge severity={incident.severity} />
           </div>
           <StatusLine incident={incident} trend={trend} />
         </div>
-        <a
-          href={reportUrl(incident.id)}
-          download
-          className="inline-flex shrink-0 items-center gap-2 rounded-md border border-line bg-surface px-3 py-1.5 text-label font-semibold text-ink transition-colors duration-150 hover:border-accent hover:text-accent focus-visible:outline-2 focus-visible:outline-accent"
+        <button
+          type="button"
+          onClick={() => downloadReport(incident)}
+          className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-line bg-surface px-3 py-1.5 text-label font-semibold text-ink transition-colors duration-150 ease-out hover:border-accent hover:text-accent focus-visible:outline-2 focus-visible:outline-accent"
         >
           <FileDown size={16} aria-hidden="true" />
-          Download report
-        </a>
+          Export report
+        </button>
       </header>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="flex min-w-0 flex-col gap-4 lg:col-span-2">
-          <Card className="flex flex-col gap-2 p-2">
-            <div className="h-[440px]" role="group" aria-label="Affected services graph">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(340px,1fr)] lg:grid-rows-[minmax(0,1fr)]">
+        <div className="flex min-h-0 min-w-0 flex-col gap-4">
+          <Card className="relative flex min-h-[300px] flex-1 flex-col p-0">
+            <div className="flex items-center justify-between gap-4 px-5 pt-4">
+              <h2 className="text-label font-semibold uppercase tracking-wide text-muted">
+                Dependency graph
+                {selected !== null && replay.index === null && (
+                  <span className="ml-2 normal-case tracking-normal text-ink">
+                    at {incident.key_moments[selected] ? tPlus(incident.key_moments[selected].timestamp, incident.start_time) : ""}
+                  </span>
+                )}
+              </h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelected(null);
+                  replay.start();
+                }}
+                disabled={replay.index !== null || incident.key_moments.length === 0}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface-2 px-3 py-1 text-label font-semibold text-ink transition-colors duration-150 ease-out hover:border-accent hover:text-accent focus-visible:outline-2 focus-visible:outline-accent disabled:cursor-default disabled:opacity-50 disabled:hover:border-line disabled:hover:text-ink"
+              >
+                <Play size={14} aria-hidden="true" />
+                {replay.index !== null ? "Replaying…" : "Replay"}
+              </button>
+            </div>
+            <div className="min-h-0 flex-1" role="group" aria-label="Affected services graph">
               {layout ? (
-                <AffectedGraph layout={layout} incident={incident} events={events} replayIndex={replay.index} />
+                <AffectedGraph
+                  layout={layout}
+                  incident={incident}
+                  events={events}
+                  replayIndex={graphIndex}
+                  replaying={replay.index !== null}
+                />
               ) : (
-                <p className="p-4 text-label text-muted">Service graph unavailable.</p>
+                <p className="p-5 text-label text-muted">Service graph unavailable.</p>
               )}
             </div>
-            <p className="px-2 pb-1 text-label text-muted">
-              Red is the root cause, amber is impacted, grey is healthy. Hover a link to see why it is drawn.
-            </p>
           </Card>
-          <Card>
+          <Card className="shrink-0 px-4 py-3">
             <KeyMoments
               moments={incident.key_moments}
               startTime={incident.start_time}
-              replayIndex={replay.index}
-              onReplay={replay.start}
               rootService={top?.service}
+              activeIndex={graphIndex}
+              selected={replay.index === null ? selected : null}
+              onSelect={setSelected}
             />
           </Card>
         </div>
 
-        <div className="flex min-w-0 flex-col gap-4">
+        <div className="flex min-h-0 min-w-0 flex-col gap-4 lg:overflow-y-auto">
           {top ? (
-            <RootCauseCard candidate={top} phrase={incident.cause_phrase} runnerUp={incident.runner_up_note} />
+            <RootCauseCard
+              key={top.service}
+              candidate={top}
+              phrase={incident.cause_phrase}
+              runnerUp={incident.runner_up_note}
+            />
           ) : (
             <Card className="flex flex-col gap-2">
-              <h2 className="text-label font-semibold text-muted">Root cause</h2>
+              <h2 className="text-label font-semibold uppercase tracking-wide text-muted">Root cause</h2>
               <p className="text-body text-muted">Still analysing — waiting for more signals.</p>
             </Card>
           )}

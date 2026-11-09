@@ -67,3 +67,18 @@ test("collapseStagger caps per-card delay and keeps the whole collapse within 2 
   const s = collapseStagger(n, 300);
   expect(s * (n - 1) + 300).toBeLessThanOrEqual(2000);
 });
+
+test("excluded events are anomalous, ungrouped and older than the window", async () => {
+  const { excludedEvents } = await import("./collapse");
+  const now = new Date("2026-11-09T12:00:30Z");
+  const mk = (id: string, at: string, level: "error" | "info" = "error") =>
+    ({ id, timestamp: at, type: "log", level, service: "s", message: "m" }) as unknown as import("./types").Event;
+  const events = [
+    mk("old", "2026-11-09T12:00:00Z"),
+    mk("fresh", "2026-11-09T12:00:25Z"),
+    mk("quiet", "2026-11-09T12:00:00Z", "info"),
+    mk("grouped", "2026-11-09T12:00:00Z"),
+  ];
+  const incidents = [{ id: "i", event_ids: ["grouped"] }] as unknown as import("./types").Incident[];
+  expect(excludedEvents(events, incidents, now).map((e) => e.id)).toEqual(["old"]);
+});

@@ -65,7 +65,7 @@ test("shows headline numbers and the incident row", async () => {
   renderPage();
   expect(screen.getByText("27")).toBeInTheDocument();
   expect(screen.getByText("raw alerts")).toBeInTheDocument();
-  expect(screen.getByText("3 isolated alerts not grouped")).toBeInTheDocument();
+  expect(screen.getByText("3 unrelated alerts excluded")).toBeInTheDocument();
   const row = screen.getByRole("link", { name: /Checkout failing/ });
   expect(row).toHaveAttribute("href", "/incidents/inc-1");
   expect(within(row).getByText("SEV1")).toBeInTheDocument();
@@ -82,7 +82,7 @@ test("numbers explain their source on hover; counts are pluralized", async () =>
   renderPage();
   expect(screen.getByTitle("warn/error/critical events and alerts received")).toHaveTextContent("27");
   expect(screen.getByTitle("groups of 3 or more correlated alerts")).toHaveTextContent("1");
-  expect(screen.getByTitle("anomalous alerts that matched no incident")).toHaveTextContent("1 isolated alert not grouped");
+  expect(screen.getByTitle("anomalous alerts that matched no incident")).toHaveTextContent("1 unrelated alert excluded");
   expect(screen.getByTitle("events grouped into this incident")).toHaveTextContent("1 alert");
   await screen.findByLabelText("search: healthy");
 });

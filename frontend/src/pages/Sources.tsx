@@ -3,20 +3,36 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Card from "../components/Card";
 import CopyButton from "../components/CopyButton";
-import { getScenarios, HttpError, simulator, uploadLog } from "../lib/api";
-import type { Scenario, SimulatorStatus, UploadResult } from "../lib/types";
+import { getEvents, getScenarios, HttpError, simulator, uploadLog } from "../lib/api";
+import type { Event, Scenario, SimulatorStatus, UploadResult } from "../lib/types";
 
 const SPEEDS = [1, 2, 5, 10];
+const COUNT_LIMIT = 100_000;
 const CURL =
   `curl -X POST http://localhost:8000/api/events -H "Content-Type: application/json" ` +
   `-d '{"service":"user-db","level":"error","message":"connection pool exhausted"}'`;
 
 const btn =
-  "inline-flex items-center gap-1 rounded-md border border-line px-3 py-1 text-body hover:border-accent hover:text-accent focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50";
+  "inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-body hover:border-accent hover:text-accent focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50";
 const primary =
-  "inline-flex items-center gap-1 rounded-md bg-accent px-3 py-1 text-body font-semibold text-canvas hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50";
+  "inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-1.5 text-body font-semibold text-white hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50";
 
-function SimulatorCard() {
+function CardHeader({ title, detail, count }: { title: string; detail: string; count: number | null }) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-0.5">
+        <h2 className="text-title font-semibold">{title}</h2>
+        <p className="text-label text-muted">{detail}</p>
+      </div>
+      <div className="flex shrink-0 flex-col items-end" title="events from this source currently held by the engine">
+        <span className="text-title font-semibold leading-none tabular-nums">{count === null ? "—" : count.toLocaleString()}</span>
+        <span className="text-label text-muted">events received</span>
+      </div>
+    </div>
+  );
+}
+
+function SimulatorCard({ received, onActivity }: { received: number | null; onActivity: () => void }) {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [scenarioId, setScenarioId] = useState("");
   const [speed, setSpeed] = useState(1);
@@ -24,13 +40,18 @@ function SimulatorCard() {
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
+  const lastEmitted = useRef<number | null>(null);
   const apply = useCallback((s: SimulatorStatus, seedScenario = false) => {
     setStatus(s);
+    if (s.emitted !== lastEmitted.current) {
+      lastEmitted.current = s.emitted;
+      onActivity();
+    }
     if (s.state !== "idle") {
       setSpeed(s.speed);
       if (seedScenario && s.scenario) setScenarioId(s.scenario);
     }
-  }, []);
+  }, [onActivity]);
 
   useEffect(() => {
     let alive = true;
@@ -92,7 +113,6 @@ function SimulatorCard() {
     if (active) void run(() => simulator.speed(n));
   };
 
-  const current = scenarios.find((s) => s.id === scenarioId);
   const statusLine =
     status && status.total > 0
       ? `${state.charAt(0).toUpperCase()}${state.slice(1)} · ${status.emitted} of ${status.total} events`
@@ -102,23 +122,36 @@ function SimulatorCard() {
 
   return (
     <Card className="flex flex-col gap-4">
-      <h2 className="text-body font-semibold">Simulator</h2>
-      <label className="flex flex-col gap-1 text-label text-muted">
-        Scenario
-        <select
-          value={scenarioId}
-          onChange={(e) => setScenarioId(e.target.value)}
-          disabled={active}
-          className="rounded-md border border-line bg-surface px-2 py-1 text-body text-ink focus-visible:outline-2 focus-visible:outline-accent"
-        >
-          {scenarios.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      {current && <p className="text-label text-muted">{current.description}</p>}
+      <CardHeader title="Simulator" detail="Replays a scripted incident as live events" count={received} />
+      <div role="radiogroup" aria-label="Scenario" className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        {scenarios.map((sc, i) => {
+          const checked = sc.id === scenarioId;
+          return (
+            <button
+              key={sc.id}
+              type="button"
+              role="radio"
+              aria-checked={checked}
+              disabled={active && !checked}
+              onClick={() => setScenarioId(sc.id)}
+              className={`flex flex-col gap-1.5 rounded-xl border p-4 text-left transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-40 ${
+                checked ? "border-accent bg-accent/8" : "border-line bg-surface-2 hover:border-muted/50"
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className={`flex h-6 w-6 items-center justify-center rounded-md border text-label font-semibold ${checked ? "border-accent text-accent" : "border-line text-muted"}`}
+                >
+                  {String.fromCharCode(65 + i)}
+                </span>
+                <span className="text-body font-semibold">{sc.name}</span>
+              </span>
+              <span className="text-label text-muted">{sc.description}</span>
+            </button>
+          );
+        })}
+      </div>
       <div role="group" aria-label="Speed" className="flex items-center gap-2">
         <span className="text-label text-muted">Speed</span>
         {SPEEDS.map((n) => (
@@ -174,7 +207,7 @@ function SimulatorCard() {
   );
 }
 
-function UploadCard() {
+function UploadCard({ received, onActivity }: { received: number | null; onActivity: () => void }) {
   const [result, setResult] = useState<UploadResult | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -187,17 +220,18 @@ function UploadCard() {
     try {
       setResult(await uploadLog(file));
       setError("");
+      onActivity();
     } catch (e) {
       setResult(null);
       setError(e instanceof HttpError ? e.message : "Upload failed. Please try again.");
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [onActivity]);
 
   return (
     <Card className="flex flex-col gap-4">
-      <h2 className="text-body font-semibold">Upload logs</h2>
+      <CardHeader title="Log upload" detail="Import a log file; each line becomes an event" count={received} />
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -209,7 +243,7 @@ function UploadCard() {
           setOver(false);
           void send(e.dataTransfer.files[0]);
         }}
-        className={`flex flex-col items-center gap-2 rounded-lg border border-dashed p-6 text-center transition-colors ${
+        className={`flex flex-col items-center gap-2 rounded-xl border border-dashed p-6 text-center transition-colors ${
           over ? "border-accent bg-accent/10" : "border-line"
         }`}
       >
@@ -271,15 +305,15 @@ function UploadCard() {
   );
 }
 
-function ApiCard() {
+function ApiCard({ received }: { received: number | null }) {
   return (
-    <Card className="flex flex-col gap-2">
-      <h2 className="text-body font-semibold">API</h2>
+    <Card className="flex flex-col gap-4">
+      <CardHeader title="REST API" detail="Push events from any system" count={received} />
       <p className="text-label text-muted">
         Send events with <code className="font-mono">POST http://localhost:8000/api/events</code>
       </p>
       <div className="flex items-start gap-2">
-        <pre className="min-w-0 flex-1 overflow-x-auto rounded-md bg-canvas p-2 font-mono text-label">
+        <pre className="min-w-0 flex-1 overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-line bg-canvas p-3 font-mono text-[12px] leading-relaxed">
           <code>{CURL}</code>
         </pre>
         <CopyButton text={CURL} what="curl example" />
@@ -288,13 +322,47 @@ function ApiCard() {
   );
 }
 
+type Counts = Record<Event["source"], number>;
+
+/** Events per source, counted from the engine's event list (refreshed on activity). */
+function useSourceCounts() {
+  const [counts, setCounts] = useState<Counts | null>(null);
+  const alive = useRef(true);
+  const refresh = useCallback(() => {
+    getEvents({ limit: COUNT_LIMIT })
+      .then((rows) => {
+        if (!alive.current) return;
+        const c: Counts = { simulator: 0, log_file: 0, api: 0 };
+        for (const r of rows) c[r.event.source] = (c[r.event.source] ?? 0) + 1;
+        setCounts(c);
+      })
+      .catch(() => {
+        /* counts unavailable: cards show a dash */
+      });
+  }, []);
+  useEffect(() => {
+    alive.current = true;
+    refresh();
+    return () => {
+      alive.current = false;
+    };
+  }, [refresh]);
+  return { counts, refresh };
+}
+
 export default function SourcesPage() {
+  const { counts, refresh } = useSourceCounts();
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-4">
-      <h1 className="text-headline font-semibold">Sources</h1>
-      <SimulatorCard />
-      <UploadCard />
-      <ApiCard />
+    <div className="mx-auto flex max-w-6xl flex-col gap-6">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-headline font-semibold tracking-tight">Sources</h1>
+        <p className="text-label text-muted">Three ways in. Everything lands in the same correlation engine.</p>
+      </div>
+      <SimulatorCard received={counts?.simulator ?? null} onActivity={refresh} />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <UploadCard received={counts?.log_file ?? null} onActivity={refresh} />
+        <ApiCard received={counts?.api ?? null} />
+      </div>
     </div>
   );
 }
