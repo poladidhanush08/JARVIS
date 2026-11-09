@@ -1,0 +1,24 @@
+2026-11-09 10:00:00 INFO auth-service: login ok user=48213 in 82ms
+2026-11-09 10:00:00 WARN user-db: connection pool at 95% (190/200)
+2026-11-09 10:00:02 ERROR user-db: connection pool exhausted, waiting for connection
+2026-11-09 10:00:04 DEBUG payment-service: heartbeat ok
+2026-11-09 10:00:05 ERROR auth-service: DB timeout after 2000ms on user-db
+2026-11-09 10:00:07 ERROR auth-service: DB timeout after 2000ms on user-db
+2026-11-09 10:00:11 ERROR auth-service: DB timeout after 2000ms on user-db
+2026-11-09 10:00:12 ERROR user-db: connection pool exhausted, waiting for connection
+2026-11-09 10:00:12 ERROR api-gateway: 5xx rate 35% on /login from auth-service
+2026-11-09 10:00:15 WARN notification-service: CPU 91% for 30s
+2026-11-09 10:00:18 ERROR payment-service: DB timeout after 2000ms on user-db
+2026-11-09 10:00:22 WARN staging-host-3: TLS certificate expires in 6 days
+2026-11-09 10:00:22 ERROR user-db: connection pool exhausted, waiting for connection
+2026-11-09 10:00:24 ERROR payment-service: DB timeout after 2000ms on user-db
+2026-11-09 10:00:25 WARN api-gateway: slow responses p95 3100ms on /checkout
+2026-11-09 10:00:26 WARN api-gateway: slow responses p95 2900ms on /pay
+2026-11-09 10:00:27 ERROR web-frontend: client error spike calling api-gateway
+2026-11-09 10:00:30 ERROR payment-service: DB timeout after 2000ms on user-db
+2026-11-09 10:00:32 WARN order-service: retries calling payment-service (attempt 3)
+2026-11-09 10:00:35 WARN bank-gateway: slow response 1800ms
+2026-11-09 10:00:40 WARN notification-service: order event backlog growing; order-service lagging
+2026-11-09 10:00:42 ERROR web-frontend: client error spike calling api-gateway
+2026-11-09 10:00:44 WARN order-service: retries calling payment-service (attempt 5)
+2026-11-09 10:00:50 INFO auth-service: login ok user=99120 in 2410ms

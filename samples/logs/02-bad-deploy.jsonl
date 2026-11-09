@@ -1,0 +1,13 @@
+{"timestamp": "2026-11-09T11:00:00Z", "service": "auth-service", "level": "info", "message": "auth-service v2.3.1", "type": "deploy", "tags": {"version": "2.3.1"}}
+{"timestamp": "2026-11-09T11:00:10Z", "service": "user-db", "level": "info", "message": "nightly vacuum complete"}
+{"timestamp": "2026-11-09T11:00:20Z", "service": "auth-service", "level": "error", "message": "config error: invalid JWT signing key", "tags": {"endpoint": "/login"}, "trace_id": "req-1001"}
+{"timestamp": "2026-11-09T11:00:22Z", "service": "auth-service", "level": "error", "message": "login failures 38%", "type": "metric", "metric": {"name": "failed_logins", "value": 380}, "tags": {"endpoint": "/login"}}
+{"timestamp": "2026-11-09T11:00:25Z", "service": "auth-service", "level": "error", "message": "config error: invalid JWT signing key", "tags": {"endpoint": "/login"}, "trace_id": "req-1002"}
+{"timestamp": "2026-11-09T11:00:25Z", "service": "api-gateway", "level": "error", "message": "5xx rate 41% on /login", "type": "alert", "tags": {"endpoint": "/login"}, "trace_id": "req-1002"}
+{"timestamp": "2026-11-09T11:00:28Z", "service": "bank-gateway", "level": "warn", "message": "slow response 1700ms"}
+{"timestamp": "2026-11-09T11:00:30Z", "service": "auth-service", "level": "error", "message": "config error: invalid JWT signing key", "tags": {"endpoint": "/login"}}
+{"timestamp": "2026-11-09T11:00:30Z", "service": "web-frontend", "level": "error", "message": "login page errors calling api-gateway", "type": "alert"}
+{"timestamp": "2026-11-09T11:00:32Z", "service": "auth-service", "level": "error", "message": "login failures 41%", "type": "metric", "metric": {"name": "failed_logins", "value": 410}, "tags": {"endpoint": "/login"}}
+{"timestamp": "2026-11-09T11:00:35Z", "service": "api-gateway", "level": "error", "message": "5xx rate 44% on /login", "type": "alert", "tags": {"endpoint": "/login"}}
+{"timestamp": "2026-11-09T11:00:40Z", "service": "web-frontend", "level": "error", "message": "login page errors calling api-gateway", "type": "alert"}
+{"timestamp": "2026-11-09T11:00:42Z", "service": "auth-service", "level": "error", "message": "login failures 43%", "type": "metric", "metric": {"name": "failed_logins", "value": 430}, "tags": {"endpoint": "/login"}}

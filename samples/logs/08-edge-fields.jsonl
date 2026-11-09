@@ -1,0 +1,31 @@
+{"timestamp": "2026-11-09T17:00:00Z", "service": "user-db", "level": "WARNING", "message": "WARNING is read as warn"}
+{"ts": "2026-11-09T17:00:01Z", "service": "user-db", "level": "Info", "msg": "ts and msg aliases, mixed-case level"}
+{"time": "2026-11-09 17:00:02", "service": "auth-service", "level": "debug", "message": "time alias, naive timestamp read as UTC"}
+{"Timestamp": "2026-11-09T22:30:03+05:30", "Service": "payment-service", "Level": "ERROR", "Message": "uppercase keys, +05:30 offset (17:00:03 UTC)"}
+{"timestamp": "2026-11-09T17:00:04.123456Z", "service": "auth-service", "level": "info", "message": "fractional seconds"}
+{"timestamp": "2026-11-09T17:00:05Z", "service": "legacy-mainframe", "level": "error", "message": "service not in services.yaml"}
+{"timestamp": "2026-11-09T17:00:06Z", "service": "api-gateway", "level": "info", "type": "alert", "message": "alert type counts as anomalous even at info"}
+{"timestamp": "2026-11-09T17:00:07Z", "service": "auth-service", "level": "warn", "type": "metric", "message": "p95 latency 2400ms", "metric": {"name": "p95_latency_ms", "value": 2400}, "tags": {"endpoint": "/login", "region": "ap-south-1"}, "trace_id": "req-91c2"}
+{"timestamp": "2026-11-09T17:00:08Z", "service": "auth-service", "level": "info", "type": "deploy", "message": "auth-service v2.4.0"}
+{"timestamp": "2026-11-09T17:00:09Z", "service": "web-frontend", "level": "info", "message": "unicode ünïcödé ✓ 日本語 🚀"}
+{"timestamp": "2026-11-09T17:00:10Z", "service": "web-frontend", "level": "info", "message": "long message xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}
+{"timestamp": "2026-11-09T17:00:11Z", "service": "order-service", "level": "info", "message": "extra unknown fields are ignored", "host": "ip-10-0-0-7", "pid": 4412}
+{"timestamp": "2026-11-09T17:00:12Z", "service": "order-service", "level": "info", "message": "metric value as a numeric string", "type": "metric", "metric": {"name": "queue_depth", "value": "42"}}
+{"timestamp": "2026-11-09T17:01:00Z", "service": "x", "level": "fatal", "message": "unknown level"}
+{"timestamp": "2026-11-09T17:01:01Z", "service": "x", "level": "error", "type": "trace", "message": "unknown type"}
+{"timestamp": "2026-11-09T17:01:02Z", "service": "x", "level": "error"}
+{"service": "x", "level": "error", "message": "missing timestamp"}
+{"timestamp": "yesterday", "service": "x", "level": "error", "message": "unparseable timestamp"}
+{"timestamp": "2026-13-45T25:61:00Z", "service": "x", "level": "error", "message": "impossible date"}
+{"timestamp": "2026-11-09T17:01:06Z", "level": "error", "message": "missing service"}
+{"timestamp": "2026-11-09T17:01:07Z", "service": "", "level": "error", "message": "empty service"}
+{"timestamp": "2026-11-09T17:01:08Z", "service": "x", "level": "error", "message": "metric without value", "metric": {"name": "cpu"}}
+{"timestamp": "2026-11-09T17:01:09Z", "service": "x", "level": "error", "message": "metric is a string", "metric": "91%"}
+{"timestamp": "2026-11-09T17:01:10Z", "service": "x", "level": "error", "message": "nested tag values", "tags": {"k8s": {"pod": "a"}}}
+[1, 2, 3]
+null
+"just a string"
+42
+{"timestamp": "2026-11-09T17:01:20Z", "service": "x", "level": "error", "message": "unclosed
+
+not json at all

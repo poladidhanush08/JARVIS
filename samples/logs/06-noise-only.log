@@ -1,0 +1,10 @@
+2026-11-09 15:00:00 INFO auth-service: login ok user=1 in 80ms
+2026-11-09 15:00:01 DEBUG payment-service: cache hit ratio 0.97
+2026-11-09 15:00:05 INFO order-service: order 8812 created
+2026-11-09 15:00:09 WARN staging-host-3: TLS certificate expires in 6 days
+2026-11-09 15:00:30 INFO user-db: checkpoint complete
+2026-11-09 15:08:00 WARN notification-service: CPU 88% for 20s
+2026-11-09 15:08:03 INFO web-frontend: deployed static assets v412
+2026-11-09 15:16:00 WARN bank-gateway: slow response 1500ms
+2026-11-09 15:24:00 ERROR legacy-batch: nightly report job failed: disk quota
+2026-11-09 15:24:05 INFO auth-service: login ok user=2 in 79ms

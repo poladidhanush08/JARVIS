@@ -1,0 +1,12 @@
+timestamp,service,level,type,message,metric,tags,trace_id
+2026-11-09T13:00:00Z,payment-service,error,log,"payment-service out of memory, worker killed",,"{""endpoint"": ""/pay""}",
+2026-11-09T13:00:03Z,payment-service,critical,alert,payment-service pods crash-looping (5 restarts),,"{""endpoint"": ""/pay""}",
+2026-11-09T13:00:06Z,order-service,warn,log,retries calling payment-service (attempt 2),,,
+2026-11-09T13:00:08Z,api-gateway,error,alert,5xx rate 18% on /pay,,"{""endpoint"": ""/pay""}",
+2026-11-09T13:00:09Z,user-db,info,log,vacuum complete,,,
+2026-11-09T13:00:10Z,payment-service,error,metric,transaction failures 22%,"{""name"": ""failed_payments"", ""value"": 64}","{""endpoint"": ""/pay""}",
+2026-11-09T13:00:14Z,web-frontend,error,alert,checkout errors calling api-gateway,,,
+2026-11-09T13:00:15Z,payment-service,error,metric,bad metric cell,{not json,,
+2026-11-09T13:00:16Z,payment-service,fatal,log,unknown level 'fatal',,,
+2026-11-09T13:00:18Z,payment-service,error,log,"payment-service out of memory, worker killed",,"{""endpoint"": ""/pay""}",
+2026-11-09T13:00:20Z,order-service,warn,log,retries calling payment-service (attempt 4),,,

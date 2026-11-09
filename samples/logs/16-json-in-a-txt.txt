@@ -1,0 +1,3 @@
+{"timestamp": "2026-11-09T21:00:00Z", "service": "user-db", "level": "error", "message": "connection pool exhausted, waiting for connection"}
+{"timestamp": "2026-11-09T21:00:03Z", "service": "auth-service", "level": "error", "message": "DB timeout after 2000ms on user-db"}
+{"timestamp": "2026-11-09T21:00:06Z", "service": "payment-service", "level": "error", "message": "DB timeout after 2000ms on user-db"}

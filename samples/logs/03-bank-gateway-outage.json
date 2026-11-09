@@ -1,0 +1,124 @@
+[
+  {
+    "timestamp": "2026-11-09T12:00:00Z",
+    "service": "bank-gateway",
+    "level": "error",
+    "message": "health check failing: HTTP 503",
+    "type": "alert"
+  },
+  {
+    "timestamp": "2026-11-09T12:00:04Z",
+    "service": "payment-service",
+    "level": "error",
+    "message": "timeout calling bank-gateway after 5000ms",
+    "tags": {
+      "endpoint": "/pay"
+    }
+  },
+  {
+    "timestamp": "2026-11-09T12:00:06Z",
+    "service": "auth-service",
+    "level": "info",
+    "message": "login success rate normal"
+  },
+  {
+    "timestamp": "2026-11-09T12:00:08Z",
+    "service": "payment-service",
+    "level": "error",
+    "message": "transaction failures 24%",
+    "type": "metric",
+    "metric": {
+      "name": "failed_payments",
+      "value": 85
+    },
+    "tags": {
+      "endpoint": "/pay"
+    }
+  },
+  {
+    "timestamp": "2026-11-09T12:00:10Z",
+    "service": "payment-service",
+    "level": "error",
+    "message": "timeout calling bank-gateway after 5000ms",
+    "tags": {
+      "endpoint": "/pay"
+    }
+  },
+  {
+    "timestamp": "2026-11-09T12:00:12Z",
+    "service": "api-gateway",
+    "level": "error",
+    "message": "5xx rate 22% on /pay",
+    "type": "alert",
+    "tags": {
+      "endpoint": "/pay"
+    }
+  },
+  {
+    "timestamp": "2026-11-09T12:00:15Z",
+    "service": "bank-gateway",
+    "level": "error",
+    "message": "health check failing: HTTP 503",
+    "type": "alert"
+  },
+  {
+    "timestamp": "2026-11-09T12:00:15Z",
+    "service": "user-db",
+    "level": "warn",
+    "message": "slow query 900ms"
+  },
+  {
+    "timestamp": "2026-11-09T12:00:16Z",
+    "service": "payment-service",
+    "level": "error",
+    "message": "timeout calling bank-gateway after 5000ms",
+    "tags": {
+      "endpoint": "/pay"
+    }
+  },
+  {
+    "timestamp": "2026-11-09T12:00:18Z",
+    "service": "payment-service",
+    "level": "error",
+    "message": "transaction failures 27%",
+    "type": "metric",
+    "metric": {
+      "name": "failed_payments",
+      "value": 95
+    },
+    "tags": {
+      "endpoint": "/pay"
+    }
+  },
+  {
+    "timestamp": "2026-11-09T12:00:22Z",
+    "service": "api-gateway",
+    "level": "error",
+    "message": "5xx rate 25% on /pay",
+    "type": "alert",
+    "tags": {
+      "endpoint": "/pay"
+    }
+  },
+  {
+    "timestamp": "2026-11-09T12:00:28Z",
+    "service": "payment-service",
+    "level": "error",
+    "message": "transaction failures 26%",
+    "type": "metric",
+    "metric": {
+      "name": "failed_payments",
+      "value": 75
+    },
+    "tags": {
+      "endpoint": "/pay"
+    }
+  },
+  {
+    "timestamp": "2026-11-09T12:00:30Z",
+    "service": "bank-gateway",
+    "level": "error",
+    "message": "health check failing: HTTP 503",
+    "type": "alert"
+  }
+]

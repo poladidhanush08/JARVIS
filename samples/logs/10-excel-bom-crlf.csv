@@ -1,0 +1,6 @@
+﻿Timestamp,Service,Level,Message
+2026-11-09T19:00:00Z,user-db,WARNING,connection pool at 97% (194/200)
+2026-11-09T19:00:02Z,user-db,ERROR,"connection pool exhausted, waiting for connection"
+2026-11-09T19:00:05Z,auth-service,ERROR,"DB timeout after 2000ms on user-db, retrying"
+2026-11-09T19:00:09Z,payment-service,ERROR,DB timeout after 2000ms on user-db
+2026-11-09T19:00:12Z,api-gateway,ERROR,"upstream auth-service returned 503, 5xx rate 20%"

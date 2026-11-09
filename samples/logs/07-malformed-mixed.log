@@ -1,0 +1,16 @@
+2026-11-09 16:00:00 ERROR user-db: connection pool exhausted, waiting for connection
+
+   
+this line is not a log line at all
+2026-11-09 16:00:02 [ERROR] user-db connection pool exhausted, waiting for connection
+2026-11-09T16:00:04Z warning auth-service: DB timeout after 2000ms on user-db
+2026-11-09 16:00:05.250 error auth-service: DB timeout after 2000ms on user-db
+2026-13-45 99:99:99 ERROR user-db: impossible date
+16:00:06 ERROR user-db: time without a date
+2026-11-09 16:00:07 FATAL user-db: unknown level
+2026-11-09 16:00:08 ERROR
+Traceback (most recent call last):
+  File "app.py", line 42, in handle
+{"timestamp": "2026-11-09T16:00:09Z", "service": "x", "level": "error", "message": "json inside a text file"}
+2026-11-09 16:00:10 CRITICAL api-gateway: 5xx rate 50% on /login from auth-service
+	2026-11-09 16:00:11 ERROR auth-service: leading tab is trimmed

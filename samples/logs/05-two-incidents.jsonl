@@ -1,0 +1,12 @@
+{"timestamp": "2026-11-09T14:00:00Z", "service": "user-db", "level": "warn", "message": "connection pool at 96% (192/200)"}
+{"timestamp": "2026-11-09T14:00:02Z", "service": "user-db", "level": "error", "message": "connection pool exhausted, waiting for connection"}
+{"timestamp": "2026-11-09T14:00:05Z", "service": "auth-service", "level": "error", "message": "DB timeout after 2000ms on user-db", "tags": {"endpoint": "/login"}}
+{"timestamp": "2026-11-09T14:00:08Z", "service": "auth-service", "level": "error", "message": "login failures 30%", "type": "metric", "metric": {"name": "failed_logins", "value": 300}, "tags": {"endpoint": "/login"}}
+{"timestamp": "2026-11-09T14:00:12Z", "service": "api-gateway", "level": "error", "message": "5xx rate 30% on /login", "type": "alert", "tags": {"endpoint": "/login"}}
+{"timestamp": "2026-11-09T14:00:15Z", "service": "user-db", "level": "error", "message": "connection pool exhausted, waiting for connection"}
+{"timestamp": "2026-11-09T14:00:18Z", "service": "auth-service", "level": "error", "message": "DB timeout after 2000ms on user-db", "tags": {"endpoint": "/login"}}
+{"timestamp": "2026-11-09T14:20:00Z", "service": "bank-gateway", "level": "error", "message": "health check failing: HTTP 503", "type": "alert"}
+{"timestamp": "2026-11-09T14:20:04Z", "service": "payment-service", "level": "error", "message": "timeout calling bank-gateway after 5000ms", "tags": {"endpoint": "/pay"}}
+{"timestamp": "2026-11-09T14:20:08Z", "service": "payment-service", "level": "error", "message": "transaction failures 20%", "type": "metric", "metric": {"name": "failed_payments", "value": 70}, "tags": {"endpoint": "/pay"}}
+{"timestamp": "2026-11-09T14:20:12Z", "service": "api-gateway", "level": "error", "message": "5xx rate 19% on /pay", "type": "alert", "tags": {"endpoint": "/pay"}}
+{"timestamp": "2026-11-09T14:20:15Z", "service": "bank-gateway", "level": "error", "message": "health check failing: HTTP 503", "type": "alert"}

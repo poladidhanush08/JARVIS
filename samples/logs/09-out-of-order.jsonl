@@ -1,0 +1,10 @@
+{"timestamp": "2026-11-09T18:00:27Z", "service": "web-frontend", "level": "error", "message": "client error spike calling api-gateway", "type": "alert"}
+{"timestamp": "2026-11-09T18:00:09Z", "service": "auth-service", "level": "error", "message": "login failures 33%", "type": "metric", "metric": {"name": "failed_logins", "value": 330}, "tags": {"endpoint": "/login"}}
+{"timestamp": "2026-11-09T18:00:02Z", "service": "user-db", "level": "error", "message": "connection pool exhausted, waiting for connection"}
+{"timestamp": "2026-11-09T18:00:12Z", "service": "api-gateway", "level": "error", "message": "5xx rate 33% on /login", "type": "alert", "tags": {"endpoint": "/login"}}
+{"timestamp": "2026-11-09T18:00:25Z", "service": "api-gateway", "level": "warn", "message": "slow responses p95 3000ms on /pay", "type": "alert", "tags": {"endpoint": "/pay"}}
+{"timestamp": "2026-11-09T18:00:00Z", "service": "user-db", "level": "warn", "message": "connection pool at 95% (190/200)"}
+{"timestamp": "2026-11-09T18:00:32Z", "service": "order-service", "level": "warn", "message": "retries calling payment-service (attempt 3)"}
+{"timestamp": "2026-11-09T18:00:20Z", "service": "payment-service", "level": "error", "message": "transaction failures 25%", "type": "metric", "metric": {"name": "failed_payments", "value": 90}, "tags": {"endpoint": "/pay"}}
+{"timestamp": "2026-11-09T18:00:05Z", "service": "auth-service", "level": "error", "message": "DB timeout after 2000ms on user-db", "tags": {"endpoint": "/login"}}
+{"timestamp": "2026-11-09T18:00:18Z", "service": "payment-service", "level": "error", "message": "DB timeout after 2000ms on user-db", "tags": {"endpoint": "/pay"}}
