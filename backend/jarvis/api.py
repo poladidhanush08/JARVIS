@@ -5,17 +5,20 @@ import os
 from datetime import datetime
 from typing import Literal
 
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from jarvis.engine import Engine, utcnow
+from jarvis.engine import utcnow
 from jarvis.graph import ServiceGraph
 from jarvis.models import Event, Metric
 from jarvis.parsers import parse_log_file
 from jarvis.report import render_markdown
-from jarvis.simulator import Simulator, list_scenarios
+from jarvis.simulator import list_scenarios
+from jarvis.workspaces import Hub, Workspace, WorkspaceStore
+
+__all__ = ["Hub", "create_app", "app"]
 
 log = logging.getLogger(__name__)
 
@@ -56,45 +59,8 @@ class SpeedBody(BaseModel):
     speed: float
 
 
-class Hub:
-    """Tracks WebSocket connections and fans out engine updates to them."""
-
-    def __init__(self, engine: Engine) -> None:
-        self.engine = engine
-        self.connections: set[WebSocket] = set()
-
-    def snapshot(self, kind: str) -> dict:
-        return {
-            "type": kind,
-            "stats": self.engine.stats(),
-            "incidents": [i.model_dump(mode="json") for i in self.engine.incidents()],
-        }
-
-    async def connect(self, ws: WebSocket) -> None:
-        await ws.accept()
-        await ws.send_json(self.snapshot("snapshot"))
-        self.connections.add(ws)
-
-    def disconnect(self, ws: WebSocket) -> None:
-        self.connections.discard(ws)
-
-    async def _send_all(self, message: dict) -> None:
-        for ws in list(self.connections):
-            try:
-                await ws.send_json(message)
-            except Exception:
-                self.connections.discard(ws)
-
-    async def broadcast(self, events: list[Event]) -> None:
-        if events:
-            await self._send_all({"type": "events", "events": [e.model_dump(mode="json") for e in events]})
-        await self._send_all(self.snapshot("update"))
-
-
 def create_app() -> FastAPI:
-    engine = Engine()
-    hub = Hub(engine)
-    sim = Simulator(engine, hub.broadcast)
+    store = WorkspaceStore()
     graph = ServiceGraph.default()
 
     app = FastAPI(title="J.A.R.V.I.S.")
@@ -105,26 +71,40 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.state.workspaces = store
 
-    async def ingest(events: list[Event]) -> int:
-        engine.ingest(events)
-        await hub.broadcast(events)
+    async def workspace(
+        x_jarvis_session: str | None = Header(None),
+        session: str | None = Query(None),
+    ) -> Workspace:
+        """The caller's workspace: header `X-Jarvis-Session` wins over `?session=`."""
+        return await store.get(x_jarvis_session if x_jarvis_session is not None else session)
+
+    WS = Depends(workspace)
+
+    @app.get("/api/health")
+    async def health() -> dict:
+        return {"status": "ok"}
+
+    async def ingest(w: Workspace, events: list[Event]) -> int:
+        w.engine.ingest(events)
+        await w.hub.broadcast(events)
         return len(events)
 
     @app.post("/api/events")
-    async def post_events(body: EventIn | list[EventIn]) -> dict:
+    async def post_events(body: EventIn | list[EventIn], w: Workspace = WS) -> dict:
         items = body if isinstance(body, list) else [body]
-        return {"accepted": await ingest([i.to_event() for i in items])}
+        return {"accepted": await ingest(w, [i.to_event() for i in items])}
 
     @app.post("/api/upload")
-    async def upload(file: UploadFile = File(...)) -> dict:
+    async def upload(file: UploadFile = File(...), w: Workspace = WS) -> dict:
         content = (await file.read()).decode("utf-8", errors="replace")
         try:
             result = parse_log_file(content, file.filename or "")
         except Exception as exc:
             log.exception("upload parse failed")
             raise HTTPException(400, f"Could not parse file: {exc}") from exc
-        await ingest(result.events)
+        await ingest(w, result.events)
         return {
             "accepted": len(result.events),
             "skipped": result.skipped,
@@ -133,31 +113,31 @@ def create_app() -> FastAPI:
         }
 
     @app.get("/api/stats")
-    async def stats() -> dict:
-        return engine.stats()
+    async def stats(w: Workspace = WS) -> dict:
+        return w.engine.stats()
 
     @app.get("/api/incidents")
-    async def incidents(include_candidates: bool = False) -> list[dict]:
-        return [i.model_dump(mode="json") for i in engine.incidents(include_candidates)]
+    async def incidents(include_candidates: bool = False, w: Workspace = WS) -> list[dict]:
+        return [i.model_dump(mode="json") for i in w.engine.incidents(include_candidates)]
 
-    def _get_incident(incident_id: str):
-        inc = engine.incident(incident_id)
+    def _get_incident(w: Workspace, incident_id: str):
+        inc = w.engine.incident(incident_id)
         if inc is None:
             raise HTTPException(404, f"Unknown incident {incident_id}")
         return inc
 
     @app.get("/api/incidents/{incident_id}")
-    async def incident_detail(incident_id: str) -> dict:
-        inc = _get_incident(incident_id)
+    async def incident_detail(incident_id: str, w: Workspace = WS) -> dict:
+        inc = _get_incident(w, incident_id)
         return {
             "incident": inc.model_dump(mode="json"),
-            "events": [e.model_dump(mode="json") for e in engine.incident_events(incident_id)],
+            "events": [e.model_dump(mode="json") for e in w.engine.incident_events(incident_id)],
         }
 
     @app.get("/api/incidents/{incident_id}/report")
-    async def incident_report(incident_id: str) -> Response:
-        inc = _get_incident(incident_id)
-        md = render_markdown(inc, engine.incident_events(incident_id))
+    async def incident_report(incident_id: str, w: Workspace = WS) -> Response:
+        inc = _get_incident(w, incident_id)
+        md = render_markdown(inc, w.engine.incident_events(incident_id))
         return Response(
             md,
             media_type="text/markdown",
@@ -165,11 +145,13 @@ def create_app() -> FastAPI:
         )
 
     @app.get("/api/events")
-    async def events(service: str | None = None, level: str | None = None, limit: int = Query(500, ge=1)) -> list[dict]:
+    async def events(
+        service: str | None = None, level: str | None = None, limit: int = Query(500, ge=1), w: Workspace = WS,
+    ) -> list[dict]:
         rows = []
-        for e in reversed(engine.events(service=service, level=level)):
-            inc_id = engine.event_incident(e.id)
-            inc = engine.incident(inc_id) if inc_id else None
+        for e in reversed(w.engine.events(service=service, level=level)):
+            inc_id = w.engine.event_incident(e.id)
+            inc = w.engine.incident(inc_id) if inc_id else None
             if inc is not None and not inc.promoted:
                 inc = None  # hidden candidate groups are not incidents
             rows.append({
@@ -190,49 +172,51 @@ def create_app() -> FastAPI:
         return [{"id": s.id, "name": s.name, "description": s.description} for s in list_scenarios()]
 
     @app.get("/api/simulator")
-    async def sim_status() -> dict:
-        return sim.status()
+    async def sim_status(w: Workspace = WS) -> dict:
+        return w.sim.status()
 
     @app.post("/api/simulator/start")
-    async def sim_start(body: StartBody) -> dict:
+    async def sim_start(body: StartBody, w: Workspace = WS) -> dict:
         try:
-            await sim.start(body.scenario_id, body.speed)
+            await w.sim.start(body.scenario_id, body.speed)
         except KeyError:
             raise HTTPException(404, f"Unknown scenario {body.scenario_id}") from None
-        await hub.broadcast([])  # the engine was reset; clear dashboards
-        return sim.status()
+        await w.hub.broadcast([])  # the engine was reset; clear dashboards
+        return w.sim.status()
 
     @app.post("/api/simulator/pause")
-    async def sim_pause() -> dict:
-        await sim.pause()
-        return sim.status()
+    async def sim_pause(w: Workspace = WS) -> dict:
+        await w.sim.pause()
+        return w.sim.status()
 
     @app.post("/api/simulator/resume")
-    async def sim_resume() -> dict:
-        await sim.resume()
-        return sim.status()
+    async def sim_resume(w: Workspace = WS) -> dict:
+        await w.sim.resume()
+        return w.sim.status()
 
     @app.post("/api/simulator/reset")
-    async def sim_reset() -> dict:
-        await sim.reset()
-        await hub.broadcast([])
-        return sim.status()
+    async def sim_reset(w: Workspace = WS) -> dict:
+        await w.sim.reset()
+        await w.hub.broadcast([])
+        return w.sim.status()
 
     @app.post("/api/simulator/speed")
-    async def sim_speed(body: SpeedBody) -> dict:
-        await sim.set_speed(body.speed)
-        return sim.status()
+    async def sim_speed(body: SpeedBody, w: Workspace = WS) -> dict:
+        await w.sim.set_speed(body.speed)
+        return w.sim.status()
 
     @app.websocket("/ws")
     async def ws_endpoint(ws: WebSocket) -> None:
-        await hub.connect(ws)
+        w = await store.get(ws.query_params.get("session"))
+        await w.hub.connect(ws)
         try:
             while True:
                 await ws.receive_text()
-        except WebSocketDisconnect:
-            pass
+                store.touch(w)
+        except (WebSocketDisconnect, RuntimeError):
+            pass  # RuntimeError: the workspace was evicted and closed this socket
         finally:
-            hub.disconnect(ws)
+            w.hub.disconnect(ws)
 
     return app
 

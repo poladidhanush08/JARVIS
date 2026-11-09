@@ -175,3 +175,16 @@ def test_events_of_hidden_incidents_have_no_incident(client):
     assert noise["incident_id"] is None and noise["reasons"] == []
     [inc] = client.get("/api/incidents").json()
     assert any(r["incident_id"] == inc["id"] for r in rows.values())
+
+
+def test_health_endpoint(client):
+    r = client.get("/api/health")
+    assert r.status_code == 200
+    assert r.json() == {"status": "ok"}
+
+
+def test_session_header_isolates_events(client):
+    client.post("/api/events", json=DB_EVENTS, headers={"X-Jarvis-Session": "visitor-aaaa-1111"})
+    assert client.get("/api/stats", headers={"X-Jarvis-Session": "visitor-aaaa-1111"}).json()["raw_alerts"] == 3
+    assert client.get("/api/stats", headers={"X-Jarvis-Session": "visitor-bbbb-2222"}).json()["raw_alerts"] == 0
+    assert client.get("/api/stats").json()["raw_alerts"] == 0
