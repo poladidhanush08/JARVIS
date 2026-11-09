@@ -3,7 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { vi, type Mock } from "vitest";
 import { useLive } from "../hooks/useLive";
 import { simulator } from "../lib/api";
-import type { Incident } from "../lib/types";
+import type { Event, Incident } from "../lib/types";
 import IncidentsPage from "./Incidents";
 
 vi.mock("../hooks/useLive");
@@ -53,13 +53,19 @@ const incident: Incident = {
   updated_at: null,
 };
 
-function mockLive(incidents: Incident[], isolated = 3, raw_alerts = 27) {
+function mockLive(
+  incidents: Incident[],
+  isolated = 3,
+  raw_alerts = 27,
+  recentEvents: Event[] = [],
+  snapshotIds: string[] | null = incidents.map((i) => i.id),
+) {
   (useLive as Mock).mockReturnValue({
     stats: { raw_alerts, incidents: incidents.length, isolated },
     incidents,
-    recentEvents: [],
+    recentEvents,
     receivedAt: new Map(),
-    snapshotIds: [],
+    snapshotIds,
     connected: true,
   });
 }
@@ -115,30 +121,111 @@ test("shows the empty state with the Run the demo button when there are no incid
   await screen.findByLabelText("search: healthy");
 });
 
-test("Run the demo starts scenario A at 2x and shows live captions", async () => {
-  mockLive([], 0, 0);
-  const view = renderPage();
-  fireEvent.click(await screen.findByRole("button", { name: "Run the demo" }));
-  expect(simulator.start).toHaveBeenCalledWith("a_db_pool", 2);
-  const bar = await screen.findByRole("status");
-  expect(bar).toHaveAttribute("aria-live", "polite");
-  expect(bar).toHaveTextContent("Starting scenario A…");
-
-  // the story finishes: caption links to the incident
-  mockLive([incident], 0, 27);
+function rerenderPage(view: ReturnType<typeof render>) {
   view.rerender(
     <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <IncidentsPage />
     </MemoryRouter>,
   );
-  expect(screen.getByRole("status")).toHaveTextContent("27 alerts → 1 incident. Root cause: postgres (High, 88%)");
-  expect(within(screen.getByRole("status")).getByRole("link", { name: "Open the incident" })).toHaveAttribute(
+}
+
+function alert(id: string, service: string): Event {
+  return {
+    id,
+    timestamp: new Date().toISOString(),
+    source: "simulator",
+    service,
+    type: "log",
+    level: "error",
+    message: "boom",
+    fingerprint: "f",
+    metric: null,
+    trace_id: null,
+    tags: {},
+  };
+}
+
+test("Run the demo starts scenario A at 2x and shows live captions", async () => {
+  mockLive([], 0, 0);
+  const view = renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Run the demo" }));
+  expect(simulator.start).toHaveBeenCalledWith("a_db_pool", 2);
+  const caption = await screen.findByTestId("demo-caption");
+  expect(caption).toHaveAttribute("aria-live", "off");
+  expect(caption).not.toHaveAttribute("role");
+  expect(caption).toHaveTextContent("Starting scenario A…");
+  const live = screen.getByRole("status");
+  expect(live).toHaveAttribute("aria-live", "polite");
+  expect(live).toHaveTextContent("Starting scenario A");
+
+  // the story finishes: caption links to the incident
+  mockLive([incident], 0, 27);
+  rerenderPage(view);
+  const done = "27 alerts → 1 incident. Root cause: postgres (High, 88%)";
+  expect(screen.getByTestId("demo-caption")).toHaveTextContent(done);
+  expect(screen.getByRole("status")).toHaveTextContent(done);
+  expect(within(screen.getByTestId("demo-caption")).getByRole("link", { name: "Open the incident" })).toHaveAttribute(
     "href",
     "/incidents/inc-1",
   );
 
   fireEvent.click(screen.getByRole("button", { name: "Close demo captions" }));
+  expect(screen.queryByTestId("demo-caption")).not.toBeInTheDocument();
   expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  await screen.findByLabelText("search: healthy");
+});
+
+test("the live region announces stage changes, not every count change", async () => {
+  mockLive([], 0, 0);
+  const view = renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Run the demo" }));
+  await screen.findByTestId("demo-caption");
+
+  mockLive([], 0, 2, [alert("e1", "postgres"), alert("e2", "checkout")]);
+  rerenderPage(view);
+  expect(screen.getByTestId("demo-caption")).toHaveTextContent("2 alerts arriving from 2 services…");
+  expect(screen.getByRole("status")).toHaveTextContent(/^Alerts arriving$/);
+
+  mockLive([], 0, 3, [alert("e3", "auth"), alert("e1", "postgres"), alert("e2", "checkout")]);
+  rerenderPage(view);
+  expect(screen.getByTestId("demo-caption")).toHaveTextContent("3 alerts arriving from 3 services…");
+  expect(screen.getByRole("status")).toHaveTextContent(/^Alerts arriving$/);
+  await screen.findByLabelText("search: healthy");
+});
+
+test("shows Connecting… instead of the button until the first snapshot arrives", async () => {
+  mockLive([], 0, 0, [], null);
+  const view = renderPage();
+  await act(async () => {});
+  expect(screen.getByText("Connecting…")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Run the demo" })).not.toBeInTheDocument();
+
+  mockLive([], 0, 0, [], []);
+  rerenderPage(view);
+  expect(await screen.findByRole("button", { name: "Run the demo" })).toBeInTheDocument();
+  expect(screen.queryByText("Connecting…")).not.toBeInTheDocument();
+  await screen.findByLabelText("search: healthy");
+});
+
+test("no Run the demo button when the snapshot has incidents", async () => {
+  mockLive([incident], 0, 27, [], ["inc-1"]);
+  renderPage();
+  await act(async () => {});
+  expect(screen.queryByRole("button", { name: "Run the demo" })).not.toBeInTheDocument();
+  await screen.findByLabelText("search: healthy");
+});
+
+test("the button comes back once the run is reset elsewhere", async () => {
+  (simulator.status as Mock).mockResolvedValue({ ...idle, scenario: "a_db_pool", state: "running" });
+  mockLive([], 0, 5);
+  const view = renderPage();
+  await act(async () => {});
+  expect(screen.queryByRole("button", { name: "Run the demo" })).not.toBeInTheDocument();
+
+  (simulator.status as Mock).mockResolvedValue(idle);
+  mockLive([], 0, 0);
+  rerenderPage(view);
+  expect(await screen.findByRole("button", { name: "Run the demo" })).toBeInTheDocument();
   await screen.findByLabelText("search: healthy");
 });
 
@@ -160,8 +247,8 @@ test("a failed start shows the error inline and re-enables the button", async ()
   const button = await screen.findByRole("button", { name: "Run the demo" });
   fireEvent.click(button);
   expect(button).toBeDisabled();
-  expect(await screen.findByText("Backend unavailable")).toBeInTheDocument();
+  expect(await screen.findByRole("alert")).toHaveTextContent("Backend unavailable");
   expect(button).toBeEnabled();
-  expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  expect(screen.queryByTestId("demo-caption")).not.toBeInTheDocument();
   await screen.findByLabelText("search: healthy");
 });

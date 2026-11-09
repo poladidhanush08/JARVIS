@@ -1,7 +1,11 @@
 import { confidenceLabel } from "./format";
 import type { Event, Incident, Stats } from "./types";
 
+export type DemoStage = 1 | 2 | 3 | 4;
+
 export interface DemoCaption {
+  /** 1 starting, 2 alerts arriving, 3 grouping, 4 root cause found. */
+  stage: DemoStage;
   text: string;
   /** Set once the story is complete: the incident to open. */
   incidentId?: string;
@@ -19,15 +23,16 @@ function isAnomalous(e: Event): boolean {
 /** Live caption for the guided demo; returns the first stage that applies. */
 export function demoCaption(stats: Stats, incidents: Incident[], recentEvents: Event[]): DemoCaption {
   const anomalous = recentEvents.filter(isAnomalous);
-  if (stats.raw_alerts === 0 && anomalous.length === 0) return { text: "Starting scenario A…" };
+  if (stats.raw_alerts === 0 && anomalous.length === 0) return { stage: 1, text: "Starting scenario A…" };
 
   if (incidents.length === 0) {
     const n = Math.max(stats.raw_alerts, anomalous.length);
     const k = new Set(anomalous.map((e) => e.service)).size;
-    return { text: k > 0 ? `${plural(n, "alert")} arriving from ${plural(k, "service")}…` : `${plural(n, "alert")} arriving…` };
+    const text = k > 0 ? `${plural(n, "alert")} arriving from ${plural(k, "service")}…` : `${plural(n, "alert")} arriving…`;
+    return { stage: 2, text };
   }
 
-  const grouping = { text: "Grouping related alerts into one incident…" };
+  const grouping: DemoCaption = { stage: 3, text: "Grouping related alerts into one incident…" };
   if (stats.raw_alerts < SETTLED_ALERTS) return grouping;
 
   const promoted = incidents
@@ -42,5 +47,16 @@ export function demoCaption(stats: Stats, incidents: Incident[], recentEvents: E
     promoted.length === 1
       ? `${stats.raw_alerts} alerts → 1 incident. Root cause: ${cause}`
       : `${stats.raw_alerts} alerts → ${promoted.length} incidents. Top root cause: ${cause}`;
-  return { text, incidentId: newest.id };
+  return { stage: 4, text, incidentId: newest.id };
+}
+
+const STAGE_MESSAGES: Record<Exclude<DemoStage, 4>, string> = {
+  1: "Starting scenario A",
+  2: "Alerts arriving",
+  3: "Grouping alerts",
+};
+
+/** Screen-reader message for a stage: stable while counts climb; the final sentence once. */
+export function demoAnnouncement(caption: DemoCaption): string {
+  return caption.stage === 4 ? caption.text : STAGE_MESSAGES[caption.stage];
 }

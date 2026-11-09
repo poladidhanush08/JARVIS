@@ -102,13 +102,25 @@ const DEMO_SCENARIO = "a_db_pool";
 const DEMO_SPEED = 2;
 
 /** Empty state: offers the guided demo unless a simulator run is already in progress. */
-function EmptyState({ onStarted }: { onStarted: () => void }) {
+function EmptyState({
+  ready,
+  rawAlerts,
+  onStarted,
+}: {
+  /** The first live snapshot has arrived, so "no incidents" is real. */
+  ready: boolean;
+  rawAlerts: number;
+  onStarted: () => void;
+}) {
   // null until the simulator status is known, so the button never flashes during a run
   const [busy, setBusy] = useState<boolean | null>(null);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Check on mount, and again whenever the engine is empty (a run reset elsewhere brings the button back).
+  const recheck = busy === null || (busy && rawAlerts === 0);
   useEffect(() => {
+    if (!recheck) return;
     let alive = true;
     simulator
       .status()
@@ -117,7 +129,7 @@ function EmptyState({ onStarted }: { onStarted: () => void }) {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [recheck, rawAlerts]);
 
   const start = async () => {
     setStarting(true);
@@ -136,7 +148,8 @@ function EmptyState({ onStarted }: { onStarted: () => void }) {
   return (
     <Card className="flex flex-col items-center gap-3 py-8 text-center">
       <p className="text-body text-muted">No incidents yet.</p>
-      {busy === false && (
+      {!ready && <p className="text-label text-muted">Connecting…</p>}
+      {ready && busy === false && (
         <>
           <button
             type="button"
@@ -150,7 +163,11 @@ function EmptyState({ onStarted }: { onStarted: () => void }) {
           <p className="max-w-md text-label text-muted">
             Plays scenario A: a payment platform where logins, slow APIs and failed payments share one cause.
           </p>
-          {error && <p className="text-label text-muted">{error}</p>}
+          {error && (
+            <p role="alert" className="text-label text-muted">
+              {error}
+            </p>
+          )}
         </>
       )}
       <p className="text-label text-muted">
@@ -194,7 +211,11 @@ export default function IncidentsPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
         {incidents.length === 0 ? (
-          <EmptyState onStarted={() => setDemoStarted(true)} />
+          <EmptyState
+            ready={snapshotIds !== null}
+            rawAlerts={stats.raw_alerts}
+            onStarted={() => setDemoStarted(true)}
+          />
         ) : (
           <ul aria-label="Incidents" className="flex flex-col gap-3">
             {incidents.map((i) => (
