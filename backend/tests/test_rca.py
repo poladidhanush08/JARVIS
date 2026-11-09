@@ -44,3 +44,22 @@ def test_runner_up_note_later_onset_and_short_list():
     c = rank_root_causes(evs, evs, ServiceGraph.default())
     assert runner_up_note(c, evs) == "auth-service ranked lower: its first anomaly came 7s later"
     assert runner_up_note(c[:1], evs) == ""
+
+
+def test_runner_up_started_earlier_uses_depend_wording():
+    dep = ev(-30, "auth-service", "auth-service v2.3.1", "info", type="deploy")
+    evs = [ev(0, "staging-host-3", "queue backlog"), ev(10, "auth-service", "config error"),
+           ev(12, "api-gateway", "5xx on /login", type="alert")]
+    c = rank_root_causes(evs, [dep, *evs], ServiceGraph.default())
+    assert c[0].service == "auth-service" and c[1].service == "staging-host-3"
+    assert runner_up_note(c, evs) == "staging-host-3 ranked lower: fewer affected services depend on it"
+
+
+def test_unknown_service_mixed_with_known_services():
+    g = ServiceGraph.default()
+    evs = [ev(0, "staging-host-3", "disk full"), ev(1, "user-db", "pool exhausted", "warn"),
+           ev(5, "auth-service", "token refresh failing")]
+    c = {x.service: x for x in rank_root_causes(evs, evs, g)}
+    assert c["staging-host-3"].factors["graph"] == 0
+    assert c["user-db"].factors["graph"] == (1 if g.depends_on("auth-service", "user-db") else 0) / 2
+    assert c["user-db"].factors["graph"] > 0

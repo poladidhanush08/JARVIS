@@ -10,11 +10,8 @@ def _names(message: str, service: str) -> bool:
     return service.lower() in message.lower()
 
 
-def _named_service(message: str, service: str, known: list[str]) -> str | None:
-    for other in known:
-        if other != service and _names(message, other):
-            return other
-    return None
+def _named_services(message: str, service: str, known: list[str]) -> list[str]:
+    return [other for other in known if other != service and _names(message, other)]
 
 
 def _most_common(messages: list[str]) -> str:
@@ -52,7 +49,7 @@ def rank_root_causes(
                 if 0 <= dt <= DEPLOY_WINDOW_S and (deploy is None or d.timestamp > deploy.timestamp):
                     deploy = d
         change = 1.0 if deploy else 0.0
-        own_msgs = [e.message for e in evs if _named_service(e.message, s, known) is None]
+        own_msgs = [e.message for e in evs if not _named_services(e.message, s, known)]
         own = len(own_msgs) / len(evs)
 
         factors = {"first": first, "graph": g, "change": change, "own": own}
@@ -75,19 +72,24 @@ def rank_root_causes(
     return out
 
 
-def runner_up_note(cands: list[RootCauseCandidate], incident_events: list[Event]) -> str:
+def runner_up_note(
+    cands: list[RootCauseCandidate], incident_events: list[Event], graph: ServiceGraph | None = None
+) -> str:
     if len(cands) < 2:
         return ""
     top, run = cands[0], cands[1]
+    known = [n["id"] for n in (graph or ServiceGraph.default()).nodes()]
     anomalous = [e for e in incident_events if e.is_anomalous]
     mine = [e for e in anomalous if e.service == run.service]
     if mine:
-        msg = _most_common([e.message for e in mine])
-        known = {e.service for e in anomalous}
-        named = next((o for o in sorted(known) if o != run.service and _names(msg, o)), None)
-        if named:
-            return f"{run.service} ranked lower: its errors point at {named}"
+        msgs = [e.message for e in mine]
+        top_named = _named_services(_most_common(msgs), run.service, known)
+        if top_named:
+            counts = Counter(o for m in msgs for o in _named_services(m, run.service, known) if o in top_named)
+            return f"{run.service} ranked lower: its errors point at {counts.most_common(1)[0][0]}"
     top_first = min((e.timestamp for e in anomalous if e.service == top.service), default=None)
     run_first = min((e.timestamp for e in mine), default=None)
-    d = int((run_first - top_first).total_seconds()) if top_first and run_first else 0
-    return f"{run.service} ranked lower: its first anomaly came {d}s later"
+    if top_first and run_first and run_first > top_first:
+        d = int((run_first - top_first).total_seconds())
+        return f"{run.service} ranked lower: its first anomaly came {d}s later"
+    return f"{run.service} ranked lower: fewer affected services depend on it"
