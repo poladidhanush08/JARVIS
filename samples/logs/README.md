@@ -21,7 +21,7 @@ Results below were observed on 2026-11-09 against the running backend.
 | `03-bank-gateway-outage.json` | JSON array | External bank gateway fails; only payments break | 13 accepted | 1 incident, root **bank-gateway**, external dependency, 80%. user-db's slow query is left out |
 | `04-payment-crash.csv` | CSV with JSON cells | payment-service runs out of memory and crash-loops (a critical alert) | 9 accepted, 2 skipped | 1 incident, root **payment-service**, 80%, SEV1. The bad metric cell and the "fatal" level row are skipped |
 | `05-two-incidents.jsonl` | JSON Lines | user-db outage, then 20 minutes later an unrelated bank-gateway outage | 12 accepted | **2 separate incidents**, each with its own correct root (user-db, bank-gateway) |
-| `09-out-of-order.jsonl` | JSON Lines | Scenario A with the lines shuffled, as if logs arrived late | 10 accepted | **Fails today:** root shown as payment-service (62%), 2 user-db alerts left isolated. Sorting each upload by time fixes it (user-db, 80%, all 10 alerts) |
+| `09-out-of-order.jsonl` | JSON Lines | Scenario A with the lines shuffled, as if logs arrived late | 10 accepted | 1 incident, root **user-db**, 80%, all 10 alerts. "Logins and payments failing because user-db ran out of connections" (the engine sorts each upload by time before grouping) |
 | `10-excel-bom-crlf.csv` | CSV | Excel export: byte-order mark, Windows line endings, capitalised header, `WARNING` level | 5 accepted | 1 incident, root **user-db**, 80% |
 | `16-json-in-a-txt.txt` | JSON Lines in a `.txt` | Wrong file extension; format is detected from the content | 3 accepted | 1 incident, root **user-db** |
 
@@ -47,6 +47,8 @@ Impact and a "N services degraded" title. The JSON and CSV files carry metrics a
   detected from content, not the file name.
 - **Correlation:** related alerts merge into one incident, noise stays out, and unrelated outages
   stay separate (files 05 and 14).
-- **Root cause:** correct in every story except the shuffled one (09), across 4 different cause
+- **Root cause:** correct in every story, including shuffled delivery, across 4 different cause
   types: pool exhaustion, bad deploy, external dependency, service crash.
+- **Known limit:** sorting happens within one upload or API batch. Alerts that arrive late in a
+  *separate* batch are still grouped in arrival order.
 - **Robustness:** bad lines are skipped and counted, never a 500 error. 5,000 events take under half a second.

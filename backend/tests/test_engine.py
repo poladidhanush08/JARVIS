@@ -99,3 +99,28 @@ def test_enrich_stamps_updated_at_from_engine_clock():
     now[0] = T0 + timedelta(hours=2)
     e.ingest([ev(3, "user-db", "pool exhausted")])
     assert inc.updated_at == T0 + timedelta(hours=2)
+
+
+def test_shuffled_batch_is_correlated_in_time_order():
+    """A log upload whose lines arrive out of order must give the same answer as in-order delivery."""
+    login, pay = {"endpoint": "/login"}, {"endpoint": "/pay"}
+    shuffled = [
+        ev(27, "web-frontend", "client error spike calling api-gateway", type="alert"),
+        ev(9, "auth-service", "login failures 33%", type="metric",
+           metric={"name": "failed_logins", "value": 330}, tags=login),
+        ev(2, "user-db", "connection pool exhausted, waiting for connection"),
+        ev(12, "api-gateway", "5xx rate 33% on /login", type="alert", tags=login),
+        ev(25, "api-gateway", "slow responses p95 3000ms on /pay", "warn", type="alert", tags=pay),
+        ev(0, "user-db", "connection pool at 95% (190/200)", "warn"),
+        ev(32, "order-service", "retries calling payment-service (attempt 3)", "warn"),
+        ev(20, "payment-service", "transaction failures 25%", type="metric",
+           metric={"name": "failed_payments", "value": 90}, tags=pay),
+        ev(5, "auth-service", "DB timeout after 2000ms on user-db", tags=login),
+        ev(18, "payment-service", "DB timeout after 2000ms on user-db", tags=pay),
+    ]
+    e = Engine(clock=lambda: T0 + timedelta(minutes=2))
+    e.ingest(shuffled)
+    [inc] = e.incidents()
+    assert inc.root_cause_candidates[0].service == "user-db"
+    assert len(inc.event_ids) == 10
+    assert e.stats() == {"raw_alerts": 10, "incidents": 1, "isolated": 0}

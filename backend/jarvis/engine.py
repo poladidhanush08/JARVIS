@@ -46,6 +46,9 @@ class Engine:
                 fresh.append(e)
         if not fresh:
             return []
+        # Correlate a batch in time order: an uploaded log can list its lines out of order,
+        # and grouping depends on which alert opens an incident. Id breaks ties deterministically.
+        fresh.sort(key=lambda e: (e.timestamp, e.id))
         self._events.extend(fresh)
         touched: set[str] = set()
         for event in fresh:
