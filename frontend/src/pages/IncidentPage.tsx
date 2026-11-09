@@ -2,6 +2,7 @@ import { ArrowLeft, FileDown, Play } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import AffectedGraph from "../components/AffectedGraph";
+import AffectedPathList from "../components/AffectedPathList";
 import Card from "../components/Card";
 import ImpactCard from "../components/ImpactCard";
 import KeyMoments from "../components/KeyMoments";
@@ -9,6 +10,7 @@ import NextStepCard from "../components/NextStepCard";
 import RootCauseCard from "../components/RootCauseCard";
 import SeverityBadge from "../components/SeverityBadge";
 import { useLive } from "../hooks/useLive";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { getGraph, getIncident, HttpError } from "../lib/api";
 import { relativeTime, tPlus } from "../lib/format";
 import { graphLayout } from "../lib/graphLayout";
@@ -188,6 +190,7 @@ function IncidentView({
 
   const replay = useReplay(Math.min(loaded?.key_moments.length ?? 0, 6));
   const [selected, setSelected] = useState<number | null>(null);
+  const phone = useMediaQuery("(max-width: 767px)");
   const layout = useMemo(() => (graph && loaded ? graphLayout(graph, loaded) : null), [graph, loaded]);
 
   if (load.state === "loading") return <p className="text-body text-muted">Loading incident…</p>;
@@ -248,19 +251,23 @@ function IncidentView({
                 {replay.index !== null ? "Replaying…" : "Replay"}
               </button>
             </div>
-            <div className="min-h-0 flex-1" role="group" aria-label="Affected services graph">
-              {layout ? (
-                <AffectedGraph
-                  layout={layout}
-                  incident={incident}
-                  events={events}
-                  replayIndex={graphIndex}
-                  replaying={replay.index !== null}
-                />
-              ) : (
-                <p className="p-5 text-label text-muted">Service graph unavailable.</p>
-              )}
-            </div>
+            {layout && phone ? (
+              <AffectedPathList layout={layout} incident={incident} events={events} replayIndex={graphIndex} />
+            ) : (
+              <div className="min-h-0 flex-1" role="group" aria-label="Affected services graph">
+                {layout ? (
+                  <AffectedGraph
+                    layout={layout}
+                    incident={incident}
+                    events={events}
+                    replayIndex={graphIndex}
+                    replaying={replay.index !== null}
+                  />
+                ) : (
+                  <p className="p-5 text-label text-muted">Service graph unavailable.</p>
+                )}
+              </div>
+            )}
           </Card>
           <Card className="shrink-0 px-4 py-3">
             <KeyMoments

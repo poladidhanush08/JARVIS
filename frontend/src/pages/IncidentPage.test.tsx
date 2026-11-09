@@ -298,3 +298,33 @@ test("export report downloads Markdown built in the browser", async () => {
   expect(click).toHaveBeenCalledTimes(1);
   click.mockRestore();
 });
+
+describe("phone layout", () => {
+  afterEach(() => {
+    // @ts-expect-error cleanup of the test stub
+    delete window.matchMedia;
+  });
+  const setMatch = (matches: boolean) => {
+    window.matchMedia = vi.fn(() => ({
+      matches,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })) as unknown as typeof window.matchMedia;
+  };
+
+  test("renders the affected-path list instead of the graph below 768px", async () => {
+    setMatch(true);
+    (getIncident as Mock).mockResolvedValue({ incident: base, events: [] });
+    renderPage();
+    expect(await screen.findByRole("list", { name: "Affected services" })).toBeInTheDocument();
+    expect(screen.queryByTestId("flow")).not.toBeInTheDocument();
+  });
+
+  test("renders the graph on wider screens", async () => {
+    setMatch(false);
+    (getIncident as Mock).mockResolvedValue({ incident: base, events: [] });
+    renderPage();
+    expect(await screen.findByTestId("flow")).toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "Affected services" })).not.toBeInTheDocument();
+  });
+});
