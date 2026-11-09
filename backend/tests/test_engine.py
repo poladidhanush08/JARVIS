@@ -88,3 +88,14 @@ def test_perf_single_ingest_under_200ms():
     start = time.perf_counter()
     e.ingest([ev(25 * 310 + 400, "user-db", "connection pool exhausted")])
     assert time.perf_counter() - start < 0.2
+
+
+def test_enrich_stamps_updated_at_from_engine_clock():
+    now = [T0 + timedelta(hours=1)]
+    e = Engine(clock=lambda: now[0])
+    e.ingest([ev(0, "user-db", "pool exhausted"), ev(1, "user-db", "pool exhausted"), ev(2, "user-db", "pool exhausted")])
+    [inc] = e.incidents()
+    assert inc.updated_at == T0 + timedelta(hours=1)
+    now[0] = T0 + timedelta(hours=2)
+    e.ingest([ev(3, "user-db", "pool exhausted")])
+    assert inc.updated_at == T0 + timedelta(hours=2)

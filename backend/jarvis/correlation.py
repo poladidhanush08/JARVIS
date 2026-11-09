@@ -76,8 +76,7 @@ class Correlator:
             _, target, reasons = max(scored, key=lambda x: x[0])
             others = [inc for _, inc, _ in scored if inc is not target]
         else:
-            target, reasons, others = self._new_incident(event), [], []
-            reasons = self.score(event, target)[1]
+            target, reasons, others = self._new_incident(event), [], []  # the founding event has no reasons
 
         self._attach(target, event, reasons)
         for other in others:

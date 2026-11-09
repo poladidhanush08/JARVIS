@@ -94,3 +94,10 @@ def test_events_for_returns_incident_events():
     c.add(b)
     assert [e.id for e in c.events_for(inc_id)] == [a.id, b.id]
     assert c.events_for("nope") == []
+
+
+def test_founding_event_has_no_reasons():
+    c = Correlator(ServiceGraph.default())
+    e1 = ev(0, "user-db", "pool exhausted")
+    i1 = c.add(e1)
+    assert c.incidents[i1].correlation_reasons[e1.id] == []

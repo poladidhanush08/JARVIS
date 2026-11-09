@@ -155,3 +155,16 @@ async def test_hub_broadcast_survives_dead_socket():
     await hub.broadcast([Event(timestamp="2026-11-09T10:00:00Z", service="user-db", message="x")])
     assert [m["type"] for m in healthy.sent] == ["events", "update"]
     assert hub.connections == {healthy}
+
+
+def test_events_of_hidden_incidents_have_no_incident(client):
+    from conftest import T0
+    from jarvis.simulator import load_scenario, scenario_events
+
+    evs = scenario_events(load_scenario("a_db_pool"), T0)
+    client.post("/api/events", json=[e.model_dump(mode="json") for e in evs])
+    rows = {r["event"]["message"]: r for r in client.get("/api/events").json()}
+    noise = rows["TLS certificate expires in 6 days"]
+    assert noise["incident_id"] is None and noise["reasons"] == []
+    [inc] = client.get("/api/incidents").json()
+    assert any(r["incident_id"] == inc["id"] for r in rows.values())

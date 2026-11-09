@@ -29,6 +29,7 @@ def test_title():
     assert make_title(Impact(failed_transactions=2), "x", "is failing") == "Payments failing because x is failing"
     assert make_title(Impact(users_affected=2), "x", "is failing") == "Logins failing because x is failing"
     assert make_title(Impact(services=["a", "b"]), "x", "is failing") == "2 services degraded because x is failing"
+    assert make_title(Impact(services=["a"]), "x", "is failing") == "1 service degraded because x is failing"
 
 
 def test_key_moments_first_anomaly_per_service_capped():

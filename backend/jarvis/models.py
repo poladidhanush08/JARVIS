@@ -96,3 +96,4 @@ class Incident(BaseModel):
     correlation_reasons: dict[str, list[str]] = Field(default_factory=dict)
     runner_up_note: str = ""
     cause_phrase: str = ""
+    updated_at: datetime | None = None  # wall clock (UTC) of the last enrichment

@@ -148,3 +148,14 @@ async def test_speed_clamped(sdir):
     await sim.start("tiny", speed=float("nan"))
     assert sim.status()["speed"] == 1
     await sim.reset()
+
+
+def test_load_scenario_rejects_unsafe_ids(tmp_path):
+    from jarvis.simulator import load_scenario
+
+    inner = tmp_path / "scenarios"
+    inner.mkdir()
+    (tmp_path / "evil.yaml").write_text(yaml.safe_dump({"name": "e", "description": "d", "duration": 1, "steps": []}), encoding="utf-8")
+    for bad in ["../evil", str(tmp_path / "evil"), "Evil", "a-b"]:
+        with pytest.raises(KeyError):
+            load_scenario(bad, inner)

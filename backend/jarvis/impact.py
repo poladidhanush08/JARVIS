@@ -58,5 +58,6 @@ def make_title(impact: Impact, root_service: str, phrase: str) -> str:
     elif logins:
         symptom = "Logins failing"
     else:
-        symptom = f"{len(impact.services)} services degraded"
+        n = len(impact.services)
+        symptom = f"{n} service{'' if n == 1 else 's'} degraded"
     return f"{symptom} because {root_service} {phrase}"

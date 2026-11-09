@@ -70,7 +70,8 @@ class Engine:
         for c in cands:
             c.cause_type = self.playbook.cause_type(c, [e for e in evs if e.service == c.service], self.graph)
         inc.root_cause_candidates = cands
-        inc.impact = compute_impact(evs, self.clock())
+        inc.updated_at = self.clock()
+        inc.impact = compute_impact(evs, inc.updated_at)
         inc.severity = severity(inc.impact, self.graph)
         inc.key_moments = key_moments(evs)
         inc.status = "investigating"

@@ -160,9 +160,11 @@ def create_app() -> FastAPI:
         for e in reversed(engine.events(service=service, level=level)):
             inc_id = engine.event_incident(e.id)
             inc = engine.incident(inc_id) if inc_id else None
+            if inc is not None and not inc.promoted:
+                inc = None  # hidden candidate groups are not incidents
             rows.append({
                 "event": e.model_dump(mode="json"),
-                "incident_id": inc_id,
+                "incident_id": inc.id if inc else None,
                 "reasons": inc.correlation_reasons.get(e.id, []) if inc else [],
             })
             if len(rows) >= limit:

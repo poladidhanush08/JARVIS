@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import logging
 import math
+import re
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -30,6 +31,9 @@ class Step(BaseModel):
     every: float = 0
 
 
+_SAFE_ID = re.compile(r"[a-z0-9_]+")
+
+
 class Scenario(BaseModel):
     id: str
     name: str
@@ -51,6 +55,8 @@ def list_scenarios(scenarios_dir: Path | None = None) -> list[Scenario]:
 
 
 def load_scenario(scenario_id: str, scenarios_dir: Path | None = None) -> Scenario:
+    if not _SAFE_ID.fullmatch(scenario_id):
+        raise KeyError(scenario_id)
     path = (scenarios_dir or DEFAULT_DIR) / f"{scenario_id}.yaml"
     if not path.is_file():
         raise KeyError(scenario_id)
