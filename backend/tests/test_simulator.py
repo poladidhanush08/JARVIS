@@ -56,6 +56,21 @@ async def test_start_twice_cancels_previous_without_duplicates(sdir):
     assert len(ids) == len(set(ids)) == TOTAL
 
 
+async def test_start_other_scenario_clears_previous_events(sdir):
+    steps = [{"at": t, "service": "auth-service", "type": "log", "level": "error", "message": f"other {i}"}
+             for i, t in enumerate([0, 0.1, 0.2])]
+    (sdir / "other.yaml").write_text(yaml.safe_dump(
+        {"id": "other", "name": "Other", "description": "d", "duration": 1, "steps": steps}))
+    sim, engine, _ = make(sdir)
+    await sim.start("tiny", speed=1)
+    await asyncio.sleep(0.15)
+    assert len(engine.events()) >= 1
+    await sim.start("other", speed=10)
+    await wait_finished(sim)
+    ids = [e.id for e in engine.events()]
+    assert len(ids) == TOTAL and all(i.startswith("other-") for i in ids)
+
+
 async def test_start_cancels_run_parked_in_on_events(sdir):
     engine = Engine()
     block = asyncio.Event()
