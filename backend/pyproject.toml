@@ -24,5 +24,6 @@ include = ["jarvis*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient"]
 asyncio_default_fixture_loop_scope = "function"
 pythonpath = ["."]
