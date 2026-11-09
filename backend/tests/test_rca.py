@@ -1,14 +1,6 @@
-from datetime import datetime, timedelta, timezone
-
+from conftest import ev
 from jarvis.graph import ServiceGraph
-from jarvis.models import Event
 from jarvis.rca import rank_root_causes, runner_up_note
-
-T0 = datetime(2026, 11, 9, 10, 0, 0, tzinfo=timezone.utc)
-
-
-def ev(t, service, msg, level="error", **kw):
-    return Event(timestamp=T0 + timedelta(seconds=t), service=service, message=msg, level=level, **kw)
 
 
 def test_db_is_root_when_first_and_depended_on():

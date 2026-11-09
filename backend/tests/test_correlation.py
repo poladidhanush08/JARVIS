@@ -1,14 +1,8 @@
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
+from conftest import T0, ev
 from jarvis.correlation import Correlator
 from jarvis.graph import ServiceGraph
-from jarvis.models import Event
-
-T0 = datetime(2026, 11, 9, 10, 0, 0, tzinfo=timezone.utc)
-
-
-def ev(t, service, msg, level="error", **kw):
-    return Event(timestamp=T0 + timedelta(seconds=t), service=service, message=msg, level=level, **kw)
 
 
 def test_dependency_plus_signature_joins():

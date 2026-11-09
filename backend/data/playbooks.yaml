@@ -1,0 +1,60 @@
+db_pool_exhaustion:
+  match: ["pool exhausted", "connection pool"]
+  phrase: ran out of connections
+  steps:
+    - action: "Raise the {service} connection pool limit"
+      effect: "queued requests drain"
+      command: "kubectl set env deploy/{service} POOL_MAX=400"
+      verify: "pool usage below 80%"
+    - action: "Kill long-running queries"
+      effect: "frees stuck connections"
+      command: "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE state='active' AND now()-query_start > interval '30 seconds';"
+      verify: "active connections drop"
+    - action: "Restart the services holding stale connections"
+      effect: "clears broken pools"
+      command: "kubectl rollout restart deploy/auth-service deploy/payment-service"
+      verify: "DB timeout errors stop"
+    - action: "Add connection timeouts and a circuit breaker"
+      effect: "prevents recurrence"
+      verify: "load test passes"
+bad_deploy:
+  match: []
+  phrase: had a bad deploy
+  steps:
+    - action: "Roll back the latest {service} release"
+      effect: "restores the last known good version"
+      command: "kubectl rollout undo deploy/{service}"
+      verify: "error rate back to baseline"
+    - action: "Diff the release config against the previous release"
+      effect: "identifies the faulty change"
+      verify: "faulty setting identified"
+    - action: "Add config validation to CI"
+      effect: "prevents recurrence"
+      verify: "invalid config fails the pipeline"
+external_dependency:
+  match: []
+  phrase: is degraded
+  steps:
+    - action: "Queue payments for retry and enable the fallback"
+      effect: "avoids failed transactions while the dependency recovers"
+      verify: "queued payments are being retried"
+    - action: "Check the provider status page"
+      effect: "confirms whether the outage is on their side"
+      verify: "provider status confirmed"
+    - action: "Tighten timeouts and alerting on {service}"
+      effect: "fails fast and surfaces recurrence sooner"
+      verify: "alert fires in a failure drill"
+generic:
+  match: []
+  phrase: is failing
+  steps:
+    - action: "Inspect recent {service} logs"
+      effect: "reveals the failing component"
+      verify: "failure mode identified"
+    - action: "Restart {service}"
+      effect: "clears transient bad state"
+      command: "kubectl rollout restart deploy/{service}"
+      verify: "error rate back to baseline"
+    - action: "Escalate to the {service} owner"
+      effect: "brings in the people who know the service"
+      verify: "owner acknowledged"
