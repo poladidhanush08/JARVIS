@@ -78,7 +78,7 @@ export interface Stats {
 
 export interface GraphNode {
   id: string;
-  tier: string;
+  tier: string | null;
 }
 
 export interface GraphEdge {

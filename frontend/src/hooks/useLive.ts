@@ -20,7 +20,12 @@ export function useLive(): { stats: Stats; incidents: Incident[]; recentEvents: 
       ws = new WebSocket(`${proto}://${location.host}/ws`);
       ws.onopen = () => setConnected(true);
       ws.onmessage = (m) => {
-        const msg = JSON.parse(m.data) as WsMessage;
+        let msg: WsMessage;
+        try {
+          msg = JSON.parse(m.data) as WsMessage;
+        } catch {
+          return; // ignore malformed frames
+        }
         if (msg.type === "events") {
           setRecentEvents((prev) => [...[...msg.events].reverse(), ...prev].slice(0, MAX_EVENTS));
         } else {

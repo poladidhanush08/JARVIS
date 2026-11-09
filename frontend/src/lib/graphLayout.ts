@@ -27,7 +27,7 @@ export function graphLayout(graph: GraphData, incident?: Incident): { nodes: Lay
 
   const rows = new Map<number, string[]>();
   for (const n of graph.nodes) {
-    const y = ROW_Y[n.tier] ?? ROW_Y.service;
+    const y = (n.tier ? ROW_Y[n.tier] : undefined) ?? ROW_Y.service;
     rows.set(y, [...(rows.get(y) ?? []), n.id]);
   }
 
