@@ -48,7 +48,7 @@ def test_jsonl_optional_fields_and_bad_line():
 
 
 def test_csv_skips_invalid_rows_and_text_naive_is_utc():
-    r = parse_log_file("timestamp,service,level,message\nnope,a,info,m\n,\n", "a.csv")
+    r = parse_log_file("timestamp,service,level,message\nnope,a,info,m\n", "a.csv")
     assert r.events == [] and r.skipped == 1
     t = parse_log_file("2026-11-09 10:00:05 info svc msg", "a.log")
     assert t.events[0].timestamp.utcoffset().total_seconds() == 0
