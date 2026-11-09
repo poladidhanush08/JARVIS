@@ -1,7 +1,9 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from jarvis.api import create_app
+from jarvis.api import Hub, create_app
+from jarvis.engine import Engine
+from jarvis.models import Event
 
 DB_EVENTS = [
     {"timestamp": f"2026-11-09T10:00:0{i}Z", "service": "user-db", "level": "error",
@@ -49,7 +51,9 @@ def test_upload_reports_skipped(client):
 
 def test_upload_bad_bytes_does_not_500(client):
     r = client.post("/api/upload", files={"file": ("x.log", b"\xff\xfe\x00garbage")})
-    assert r.status_code in (200, 400)
+    assert r.status_code == 200
+    body = r.json()
+    assert (body["accepted"], body["skipped"]) == (0, 1)
 
 
 def test_unknown_incident_404(client):
@@ -117,3 +121,37 @@ def test_reset_broadcasts_update(client_with_incident):
 def test_cors_allows_dev_origin(client):
     r = client.get("/api/stats", headers={"Origin": "http://localhost:5173"})
     assert r.headers["access-control-allow-origin"] == "http://localhost:5173"
+
+
+def test_events_limit_must_be_positive(client):
+    assert client.get("/api/events?limit=0").status_code == 422
+    assert client.get("/api/events?limit=-1").status_code == 422
+
+
+@pytest.mark.parametrize("speed", [0, -5])
+def test_simulator_speed_is_clamped(client, speed):
+    assert client.post("/api/simulator/start", json={"scenario_id": "a_db_pool", "speed": speed}).status_code == 200
+    assert client.get("/api/simulator").json()["speed"] == 1
+    client.post("/api/simulator/speed", json={"speed": 10})
+    client.post("/api/simulator/speed", json={"speed": speed})
+    assert client.get("/api/simulator").json()["speed"] == 1
+    client.post("/api/simulator/reset")
+
+
+class FakeWS:
+    def __init__(self, fail=False):
+        self.fail, self.sent = fail, []
+
+    async def send_json(self, msg):
+        if self.fail:
+            raise RuntimeError("closed")
+        self.sent.append(msg)
+
+
+async def test_hub_broadcast_survives_dead_socket():
+    hub = Hub(Engine())
+    dead, healthy = FakeWS(fail=True), FakeWS()
+    hub.connections.update({dead, healthy})
+    await hub.broadcast([Event(timestamp="2026-11-09T10:00:00Z", service="user-db", message="x")])
+    assert [m["type"] for m in healthy.sent] == ["events", "update"]
+    assert hub.connections == {healthy}

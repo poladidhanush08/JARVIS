@@ -4,7 +4,7 @@ import logging
 from datetime import datetime
 from typing import Literal
 
-from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
@@ -63,8 +63,8 @@ class Hub:
 
     async def connect(self, ws: WebSocket) -> None:
         await ws.accept()
-        self.connections.add(ws)
         await ws.send_json(self.snapshot("snapshot"))
+        self.connections.add(ws)
 
     def disconnect(self, ws: WebSocket) -> None:
         self.connections.discard(ws)
@@ -155,7 +155,7 @@ def create_app() -> FastAPI:
         )
 
     @app.get("/api/events")
-    async def events(service: str | None = None, level: str | None = None, limit: int = 500) -> list[dict]:
+    async def events(service: str | None = None, level: str | None = None, limit: int = Query(500, ge=1)) -> list[dict]:
         rows = []
         for e in reversed(engine.events(service=service, level=level)):
             inc_id = engine.event_incident(e.id)
@@ -165,7 +165,7 @@ def create_app() -> FastAPI:
                 "incident_id": inc_id,
                 "reasons": inc.correlation_reasons.get(e.id, []) if inc else [],
             })
-            if len(rows) >= max(limit, 0):
+            if len(rows) >= limit:
                 break
         return rows
 
