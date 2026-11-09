@@ -1,0 +1,12 @@
+id: b_bad_deploy
+name: "B · bad auth-service deploy"
+description: A new auth-service release ships a broken JWT signing key, breaking logins right after the deploy.
+duration: 50
+steps:
+  - {at: 0, service: auth-service, type: deploy, level: info, message: "auth-service v2.3.1"}
+  - {at: 10, service: user-db, type: log, level: info, message: "nightly vacuum complete"}
+  - {at: 20, service: auth-service, type: log, level: error, message: "config error: invalid JWT signing key", repeat: 4, every: 5, tags: {endpoint: /login}}
+  - {at: 22, service: auth-service, type: metric, level: error, message: "login failures 38%", metric: {name: failed_logins, value: 380}, repeat: 3, every: 10, tags: {endpoint: /login}}
+  - {at: 25, service: api-gateway, type: alert, level: error, message: "5xx rate 41% on /login", repeat: 2, every: 10, tags: {endpoint: /login}}
+  - {at: 28, service: bank-gateway, type: log, level: warn, message: "slow response 1700ms"}
+  - {at: 30, service: web-frontend, type: alert, level: error, message: "login page errors calling api-gateway", repeat: 2, every: 10}

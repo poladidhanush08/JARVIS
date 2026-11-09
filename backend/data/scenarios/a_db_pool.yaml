@@ -1,0 +1,21 @@
+id: a_db_pool
+name: "A · user-db pool exhaustion"
+description: The user-db connection pool saturates, cascading into login and payment failures across the stack.
+duration: 60
+steps:
+  - {at: 0, service: user-db, type: log, level: warn, message: "connection pool at 95% (190/200)"}
+  - {at: 2, service: user-db, type: log, level: error, message: "connection pool exhausted, waiting for connection", repeat: 3, every: 10}
+  - {at: 5, service: auth-service, type: log, level: error, message: "DB timeout after 2000ms on user-db", repeat: 4, every: 6, tags: {endpoint: /login}}
+  - {at: 6, service: auth-service, type: metric, level: warn, message: "p95 latency 2400ms", metric: {name: p95_latency_ms, value: 2400}}
+  - {at: 12, service: api-gateway, type: alert, level: error, message: "5xx rate 35% on /login", repeat: 2, every: 10, tags: {endpoint: /login}}
+  - {at: 12, service: auth-service, type: metric, level: error, message: "login failures 35%", metric: {name: failed_logins, value: 420}, repeat: 3, every: 10, tags: {endpoint: /login}}
+  - {at: 15, service: notification-service, type: metric, level: warn, message: "CPU 91% for 30s", metric: {name: cpu_pct, value: 91}}
+  - {at: 18, service: payment-service, type: log, level: error, message: "DB timeout after 2000ms on user-db", repeat: 3, every: 6, tags: {endpoint: /pay}}
+  - {at: 20, service: payment-service, type: metric, level: error, message: "transaction failures 28%", metric: {name: failed_payments, value: 104}, repeat: 3, every: 10, tags: {endpoint: /pay}}
+  - {at: 22, service: staging-host-3, type: alert, level: warn, message: "TLS certificate expires in 6 days"}
+  - {at: 25, service: api-gateway, type: alert, level: warn, message: "slow responses p95 3100ms on /checkout", tags: {endpoint: /checkout}}
+  - {at: 26, service: api-gateway, type: alert, level: warn, message: "slow responses p95 2900ms on /pay", tags: {endpoint: /pay}}
+  - {at: 27, service: web-frontend, type: alert, level: error, message: "client error spike calling api-gateway", repeat: 2, every: 15}
+  - {at: 32, service: order-service, type: log, level: warn, message: "retries calling payment-service (attempt 3)", repeat: 2, every: 12}
+  - {at: 35, service: bank-gateway, type: log, level: warn, message: "slow response 1800ms"}
+  - {at: 40, service: notification-service, type: log, level: warn, message: "order event backlog growing; order-service lagging"}

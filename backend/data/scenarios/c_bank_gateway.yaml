@@ -1,0 +1,11 @@
+id: c_bank_gateway
+name: "C · bank-gateway degraded"
+description: The external bank-gateway fails health checks, so payments time out while the rest of the platform stays healthy.
+duration: 40
+steps:
+  - {at: 0, service: bank-gateway, type: alert, level: error, message: "health check failing: HTTP 503", repeat: 3, every: 15}
+  - {at: 4, service: payment-service, type: log, level: error, message: "timeout calling bank-gateway after 5000ms", repeat: 4, every: 6, tags: {endpoint: /pay}}
+  - {at: 6, service: auth-service, type: log, level: info, message: "login success rate normal"}
+  - {at: 8, service: payment-service, type: metric, level: error, message: "transaction failures 24%", metric: {name: failed_payments, value: 85}, repeat: 3, every: 10, tags: {endpoint: /pay}}
+  - {at: 12, service: api-gateway, type: alert, level: error, message: "5xx rate 22% on /pay", repeat: 2, every: 10, tags: {endpoint: /pay}}
+  - {at: 15, service: user-db, type: log, level: warn, message: "slow query 900ms"}
