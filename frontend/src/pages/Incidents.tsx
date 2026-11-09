@@ -1,13 +1,15 @@
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Play } from "lucide-react";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Card from "../components/Card";
 import CollapseStream from "../components/CollapseStream";
+import DemoGuide from "../components/DemoGuide";
 import ServiceDots from "../components/ServiceDots";
 import SeverityBadge from "../components/SeverityBadge";
 import { canAnimate, useCountUp } from "../hooks/useCountUp";
 import { useLive } from "../hooks/useLive";
+import { simulator } from "../lib/api";
 import { confidenceLabel, relativeTime } from "../lib/format";
 import type { Incident } from "../lib/types";
 
@@ -96,13 +98,88 @@ function Headline({
   );
 }
 
+const DEMO_SCENARIO = "a_db_pool";
+const DEMO_SPEED = 2;
+
+/** Empty state: offers the guided demo unless a simulator run is already in progress. */
+function EmptyState({ onStarted }: { onStarted: () => void }) {
+  // null until the simulator status is known, so the button never flashes during a run
+  const [busy, setBusy] = useState<boolean | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    simulator
+      .status()
+      .then((s) => alive && setBusy(s.state === "running" || s.state === "paused"))
+      .catch(() => alive && setBusy(false));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const start = async () => {
+    setStarting(true);
+    setError(null);
+    try {
+      await simulator.start(DEMO_SCENARIO, DEMO_SPEED);
+      setBusy(true);
+      onStarted();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  return (
+    <Card className="flex flex-col items-center gap-3 py-8 text-center">
+      <p className="text-body text-muted">No incidents yet.</p>
+      {busy === false && (
+        <>
+          <button
+            type="button"
+            onClick={start}
+            disabled={starting}
+            className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-1.5 text-body font-semibold text-white transition-opacity duration-150 hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Play size={14} aria-hidden="true" />
+            Run the demo
+          </button>
+          <p className="max-w-md text-label text-muted">
+            Plays scenario A: a payment platform where logins, slow APIs and failed payments share one cause.
+          </p>
+          {error && <p className="text-label text-muted">{error}</p>}
+        </>
+      )}
+      <p className="text-label text-muted">
+        Or open{" "}
+        <Link to="/sources" className="text-accent underline-offset-2 hover:underline">
+          Sources
+        </Link>{" "}
+        to upload logs or send events by API.
+      </p>
+    </Card>
+  );
+}
+
 export default function IncidentsPage() {
   const { stats, incidents, recentEvents, receivedAt, snapshotIds } = useLive();
+  const [demoStarted, setDemoStarted] = useState(false);
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <h1 className="text-headline font-semibold tracking-tight">Incidents</h1>
       <ServiceDots incidents={incidents} />
+      {demoStarted && (
+        <DemoGuide
+          stats={stats}
+          incidents={incidents}
+          recentEvents={recentEvents}
+          onClose={() => setDemoStarted(false)}
+        />
+      )}
 
       <Card className="flex flex-col gap-4 p-6">
         <div className="flex flex-wrap items-end gap-x-6 gap-y-4">
@@ -117,13 +194,7 @@ export default function IncidentsPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
         {incidents.length === 0 ? (
-          <Card className="py-8 text-center text-body text-muted">
-            All quiet. Start a scenario from{" "}
-            <Link to="/sources" className="text-accent underline-offset-2 hover:underline">
-              Sources
-            </Link>{" "}
-            to see J.A.R.V.I.S. work.
-          </Card>
+          <EmptyState onStarted={() => setDemoStarted(true)} />
         ) : (
           <ul aria-label="Incidents" className="flex flex-col gap-3">
             {incidents.map((i) => (

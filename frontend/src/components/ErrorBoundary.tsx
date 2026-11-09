@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 
 interface State {
   failed: boolean;
@@ -32,4 +33,10 @@ export default class ErrorBoundary extends Component<{ children: ReactNode }, St
       </section>
     );
   }
+}
+
+/** ErrorBoundary that resets on navigation, so the sidebar can lead away from an error screen. */
+export function RouteErrorBoundary({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation();
+  return <ErrorBoundary key={pathname}>{children}</ErrorBoundary>;
 }
