@@ -2,76 +2,94 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { collapseStagger, pendingEvents } from "../lib/collapse";
 import type { Event, Incident } from "../lib/types";
 
-const DURATION_MS = 300;
+export const COLLAPSE_DURATION_MS = 300;
 const TICK_MS = 1000;
+/** Incidents arriving this soon after mount are the initial snapshot, not new ones. */
+export const SNAPSHOT_GRACE_MS = 1000;
 
-interface Flight {
+interface FlyingCard {
+  event: Event;
   incidentId: string;
-  cards: Event[];
 }
 
 const prefersReducedMotion = () =>
   typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
+const findRow = (incidentId: string) =>
+  Array.from(document.querySelectorAll<HTMLElement>("[data-incident-row]")).find(
+    (el) => el.dataset.incidentRow === incidentId,
+  );
+
 /**
- * Anomalous events waiting to be grouped. When a new incident appears, the cards that
- * were waiting fly into that incident's row (`[data-incident-row=id]`) once, then clear.
+ * Anomalous events waiting to be grouped. When a new incident appears, the waiting cards
+ * whose events it absorbed fly into its row (`[data-incident-row=id]`) once, then clear.
  */
 export default function CollapseStream({ recentEvents, incidents }: { recentEvents: Event[]; incidents: Incident[] }) {
   const [now, setNow] = useState(() => new Date());
-  const [flight, setFlight] = useState<Flight | null>(null);
+  const [flight, setFlight] = useState<FlyingCard[] | null>(null);
+  const mountedAt = useRef(Date.now());
   const seen = useRef<Set<string> | null>(null);
   const lastShown = useRef<Event[]>([]);
   const cardEls = useRef(new Map<string, HTMLElement>());
 
+  const pending = useMemo(() => pendingEvents(recentEvents, incidents, now), [recentEvents, incidents, now]);
+  const hasPending = pending.length > 0;
+
+  // Tick only while cards are waiting, so expired cards (older than 10 s) drop out.
   useEffect(() => {
+    if (!hasPending) return;
     const t = setInterval(() => setNow(new Date()), TICK_MS);
     return () => clearInterval(t);
-  }, []);
+  }, [hasPending]);
 
-  const pending = useMemo(() => pendingEvents(recentEvents, incidents, now), [recentEvents, incidents, now]);
-
-  // Detect a newly appeared incident id; incidents present on first render never animate.
+  // Detect newly appeared incident ids. The initial snapshot (first non-empty list shortly
+  // after mount) seeds `seen` and never animates.
   useEffect(() => {
     const ids = incidents.map((i) => i.id);
     if (seen.current === null) {
-      seen.current = new Set(ids);
-      return;
+      const inGrace = Date.now() - mountedAt.current < SNAPSHOT_GRACE_MS;
+      if (ids.length === 0 && inGrace) return;
+      if (inGrace) {
+        seen.current = new Set(ids);
+        return;
+      }
+      seen.current = new Set();
     }
     const known = seen.current;
-    const fresh = ids.find((id) => !known.has(id));
-    ids.forEach((id) => known.add(id));
-    if (!fresh) return;
-    const stillPending = new Set(pending.map((e) => e.id));
-    const absorbed = lastShown.current.filter((e) => !stillPending.has(e.id));
-    lastShown.current = [];
-    if (absorbed.length > 0 && !prefersReducedMotion()) setFlight({ incidentId: fresh, cards: absorbed });
-  }, [incidents, pending]);
+    const fresh = incidents.filter((i) => !known.has(i.id));
+    fresh.forEach((i) => known.add(i.id));
+    if (fresh.length === 0) return;
+    const shown = lastShown.current;
+    const flying = fresh.flatMap((inc) => {
+      const absorbed = new Set(inc.event_ids);
+      return shown.filter((e) => absorbed.has(e.id)).map((event) => ({ event, incidentId: inc.id }));
+    });
+    if (flying.length > 0 && !prefersReducedMotion()) setFlight(flying);
+  }, [incidents]);
 
   useEffect(() => {
     if (!flight) lastShown.current = pending;
   }, [pending, flight]);
 
-  // Run the flight: measure each card, then transition it into the target row.
+  // Run the flight: measure each card, then transition it into its target row.
   useLayoutEffect(() => {
     if (!flight) return;
-    const target = document.querySelector<HTMLElement>(`[data-incident-row="${CSS.escape(flight.incidentId)}"]`);
-    const to = target?.getBoundingClientRect();
-    const stagger = collapseStagger(flight.cards.length, DURATION_MS);
+    const stagger = collapseStagger(flight.length, COLLAPSE_DURATION_MS);
     const frame = requestAnimationFrame(() => {
-      flight.cards.forEach((e, i) => {
-        const el = cardEls.current.get(e.id);
+      flight.forEach(({ event, incidentId }, i) => {
+        const el = cardEls.current.get(event.id);
         if (!el) return;
+        const to = findRow(incidentId)?.getBoundingClientRect();
         const from = el.getBoundingClientRect();
         const dx = to ? to.left + 24 - from.left : 0;
         const dy = to ? to.top + to.height / 2 - (from.top + from.height / 2) : 0;
         const delay = i * stagger;
-        el.style.transition = `transform ${DURATION_MS}ms ease-in ${delay}ms, opacity ${DURATION_MS}ms ease-in ${delay}ms`;
+        el.style.transition = `transform ${COLLAPSE_DURATION_MS}ms ease-in ${delay}ms, opacity ${COLLAPSE_DURATION_MS}ms ease-in ${delay}ms`;
         el.style.transform = `translate(${dx}px, ${dy}px) scale(0.6)`;
         el.style.opacity = "0";
       });
     });
-    const total = DURATION_MS + stagger * Math.max(0, flight.cards.length - 1);
+    const total = COLLAPSE_DURATION_MS + stagger * Math.max(0, flight.length - 1);
     const timer = setTimeout(() => setFlight(null), total);
     return () => {
       cancelAnimationFrame(frame);
@@ -79,7 +97,8 @@ export default function CollapseStream({ recentEvents, incidents }: { recentEven
     };
   }, [flight]);
 
-  const cards = flight ? flight.cards : pending;
+  const flyingIds = new Set(flight?.map((c) => c.event.id) ?? []);
+  const cards = [...(flight?.map((c) => c.event) ?? []), ...pending.filter((e) => !flyingIds.has(e.id))];
   if (cards.length === 0) return null;
 
   return (
@@ -89,6 +108,7 @@ export default function CollapseStream({ recentEvents, incidents }: { recentEven
         {cards.map((e) => (
           <li
             key={e.id}
+            data-testid="pending-card"
             ref={(el) => {
               if (el) cardEls.current.set(e.id, el);
               else cardEls.current.delete(e.id);

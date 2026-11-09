@@ -14,6 +14,13 @@ const LABEL: Record<ServiceStatus, string> = {
   healthy: "healthy",
 };
 
+/** Visible status word beside non-healthy names, so colour is never the only signal. */
+const WORD: Record<ServiceStatus, string> = {
+  root: "root",
+  impacted: "impacted",
+  healthy: "",
+};
+
 export default function ServiceDots({ incidents }: { incidents: Incident[] }) {
   const [services, setServices] = useState<string[]>([]);
 
@@ -41,7 +48,10 @@ export default function ServiceDots({ incidents }: { incidents: Incident[] }) {
         return (
           <li key={s} title={label} aria-label={label} className="flex items-center gap-2 text-label text-muted">
             <span aria-hidden="true" className={`h-2 w-2 rounded-full transition-colors duration-200 ${DOT[status]}`} />
-            <span aria-hidden="true">{s}</span>
+            <span aria-hidden="true" className={status === "healthy" ? "" : "text-ink"}>
+              {s}
+            </span>
+            {status !== "healthy" && <span aria-hidden="true">{WORD[status]}</span>}
           </li>
         );
       })}
