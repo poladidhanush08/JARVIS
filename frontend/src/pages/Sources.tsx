@@ -8,6 +8,7 @@ import { publicApiOrigin } from "../lib/endpoint";
 import type { Event, Scenario, SimulatorStatus, UploadResult } from "../lib/types";
 
 const SPEEDS = [1, 2, 5, 10];
+export const SCENARIO_RETRY_MS = 3000;
 const COUNT_LIMIT = 100_000;
 const EVENTS_ENDPOINT = `${publicApiOrigin()}/api/events`;
 const CURL =
@@ -57,23 +58,32 @@ function SimulatorCard({ received, onActivity }: { received: number | null; onAc
 
   useEffect(() => {
     let alive = true;
-    getScenarios()
-      .then((s) => {
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    // The backend may be asleep (free hosting). Keep trying until it answers instead of
+    // leaving a dead "could not load" message on the page.
+    const load = async () => {
+      try {
+        const s = await getScenarios();
         if (!alive) return;
         setScenarios(s);
         setScenarioId((cur) => cur || s[0]?.id || "");
-      })
-      .catch(() => {
-        if (alive) setError("Could not load scenarios.");
-      });
-    simulator
-      .status()
-      .then((s) => {
-        if (alive) apply(s, true);
-      })
-      .catch(() => {});
+        setError("");
+        simulator
+          .status()
+          .then((st) => {
+            if (alive) apply(st, true);
+          })
+          .catch(() => {});
+      } catch {
+        if (!alive) return;
+        setError("Waiting for the analysis engine to start… retrying.");
+        retry = setTimeout(load, SCENARIO_RETRY_MS);
+      }
+    };
+    void load();
     return () => {
       alive = false;
+      clearTimeout(retry);
     };
   }, [apply]);
 

@@ -46,19 +46,24 @@ export default function KeyMoments({
       {shown.length === 0 ? (
         <p className="text-label text-muted">No anomalies recorded yet.</p>
       ) : (
-        <ol className="relative grid auto-cols-fr grid-flow-col gap-2 overflow-x-auto">
-          <span aria-hidden="true" className="pointer-events-none absolute left-2 right-2 top-[32px] h-px bg-line" />
+        // Columns never shrink below 7rem: on narrow screens the strip scrolls sideways instead
+        // of squeezing the labels on top of each other. The connector line is drawn per item so
+        // it keeps running under every moment while scrolling.
+        <ol className="grid auto-cols-[minmax(7rem,1fr)] grid-flow-col gap-2 overflow-x-auto pb-1">
           {shown.map((m, i) => {
             const reached = activeIndex === null || i <= activeIndex;
             const current = activeIndex !== null && i === activeIndex;
             return (
-              <li key={m.event_id} aria-current={current ? "step" : undefined} className="min-w-28">
+              <li key={m.event_id} aria-current={current ? "step" : undefined} className="relative min-w-0">
+                {i < shown.length - 1 && (
+                  <span aria-hidden="true" className="pointer-events-none absolute left-4 -right-2 top-[32px] h-px bg-line" />
+                )}
                 <button
                   type="button"
                   aria-pressed={selected === i}
                   onClick={() => onSelect(selected === i ? null : i)}
                   title={`Show the graph at ${tPlus(m.timestamp, startTime)}`}
-                  className={`flex w-full flex-col items-start gap-1 rounded-lg px-2 py-1 text-left transition-colors duration-150 hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-accent ${selected === i ? "bg-surface-2" : ""}`}
+                  className={`relative flex w-full flex-col items-start gap-1 rounded-lg px-2 py-1 text-left transition-colors duration-150 hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-accent ${selected === i ? "bg-surface-2" : ""}`}
                 >
                   <span title="seconds after the incident's first anomaly" className="text-label tabular-nums text-muted">
                     {tPlus(m.timestamp, startTime)}

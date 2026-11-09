@@ -3,7 +3,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, vi } from "vitest";
 import { HttpError, simulator, uploadLog } from "../lib/api";
 import type { SimulatorStatus } from "../lib/types";
-import SourcesPage from "./Sources";
+import SourcesPage, { SCENARIO_RETRY_MS } from "./Sources";
 
 vi.mock("../lib/api", async (orig) => ({
   ...(await orig<typeof import("../lib/api")>()),
@@ -214,4 +214,21 @@ test("scenario cards are lettered and each source shows its events-received coun
   expect(screen.getByRole("radio", { name: /Cache storm/ })).toHaveAttribute("aria-checked", "true");
   const counters = screen.getAllByText("events received").map((el) => el.previousElementSibling?.textContent);
   expect(counters).toEqual(["2", "0", "1"]);
+});
+
+test("keeps retrying the scenario list while the backend wakes up", async () => {
+  const { getScenarios } = await import("../lib/api");
+  vi.mocked(getScenarios)
+    .mockRejectedValueOnce(new Error("Failed to fetch"))
+    .mockRejectedValueOnce(new Error("Failed to fetch"));
+  await renderWith(st({}));
+  expect(screen.getByText(/Waiting for the analysis engine to start/)).toBeInTheDocument();
+  expect(screen.queryByText("Checkout outage")).not.toBeInTheDocument();
+
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(SCENARIO_RETRY_MS * 2);
+  });
+  expect(screen.getByText("Checkout outage")).toBeInTheDocument();
+  expect(screen.queryByText(/Waiting for the analysis engine/)).not.toBeInTheDocument();
+  expect(getScenarios).toHaveBeenCalledTimes(3);
 });

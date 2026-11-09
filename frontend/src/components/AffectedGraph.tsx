@@ -9,6 +9,7 @@ import {
   type EdgeProps,
   type Node,
   type NodeProps,
+  type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { animate } from "motion";
@@ -126,6 +127,7 @@ function PulseEdgeView({ id, sourceX, sourceY, targetX, targetY, sourcePosition,
   );
 }
 
+const FIT = { padding: 0.12, minZoom: 0.2 };
 const nodeTypes = { service: ServiceNodeView };
 const edgeTypes = { pulse: PulseEdgeView };
 
@@ -144,6 +146,19 @@ export default function AffectedGraph({
   replaying?: boolean;
 }) {
   const [hovered, setHovered] = useState<string | null>(null);
+  const box = useRef<HTMLDivElement>(null);
+  const flow = useRef<ReactFlowInstance<ServiceNode, PulseEdge> | null>(null);
+
+  // `fitView` only runs once on mount; refit whenever the card changes size (window resize,
+  // phone rotation) so the whole topology always stays in view.
+  useEffect(() => {
+    const el = box.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => void flow.current?.fitView(FIT));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   const { nodes, edges } = useMemo(() => {
     const els = graphElements(layout, incident, events, replayIndex, hovered);
     const flowEdges: PulseEdge[] = els.edges.map((e) => ({
@@ -165,8 +180,11 @@ export default function AffectedGraph({
   }, [layout, incident, events, replayIndex, hovered, replaying]);
 
   return (
-    <div className="h-full w-full">
+    <div ref={box} className="h-full w-full">
       <ReactFlow
+        onInit={(instance) => {
+          flow.current = instance;
+        }}
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
@@ -179,7 +197,9 @@ export default function AffectedGraph({
         zoomOnDoubleClick={false}
         preventScrolling={false}
         fitView
-        fitViewOptions={{ padding: 0.12 }}
+        fitViewOptions={FIT}
+        // The full topology is ~800px wide; a phone needs to zoom out further than the 0.5 default.
+        minZoom={0.2}
         colorMode="dark"
         onEdgeMouseEnter={(_, edge) => setHovered(edge.id)}
         onEdgeMouseLeave={() => setHovered(null)}
