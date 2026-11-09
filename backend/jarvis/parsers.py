@@ -150,7 +150,7 @@ def _parse_text(content: str, result: ParseResult) -> None:
 
 
 def parse_log_file(content: str, filename: str) -> ParseResult:
-    content = content.removeprefix("﻿")
+    content = content.removeprefix("\ufeff")
     fmt = _detect(content, filename)
     result = ParseResult(format=fmt)
     {"jsonl": _parse_jsonl, "json": _parse_json, "csv": _parse_csv, "text": _parse_text}[fmt](
