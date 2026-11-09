@@ -91,7 +91,7 @@ def _parse_jsonl(content: str, result: ParseResult) -> None:
             continue
         try:
             record = json.loads(line)
-        except ValueError:
+        except (ValueError, RecursionError):
             result.skipped += 1
             continue
         _try(record, result)
@@ -100,7 +100,7 @@ def _parse_jsonl(content: str, result: ParseResult) -> None:
 def _parse_json(content: str, result: ParseResult) -> None:
     try:
         records = json.loads(content)
-    except ValueError:
+    except (ValueError, RecursionError):
         result.skipped += 1
         return
     if not isinstance(records, list):
@@ -119,7 +119,7 @@ def _parse_csv(content: str, result: ParseResult) -> None:
                 if cell:
                     try:
                         row[key] = json.loads(cell)
-                    except ValueError:
+                    except (ValueError, RecursionError):
                         row[key] = None
                         row["__bad__"] = True
             if row.pop("__bad__", False):
@@ -150,6 +150,7 @@ def _parse_text(content: str, result: ParseResult) -> None:
 
 
 def parse_log_file(content: str, filename: str) -> ParseResult:
+    content = content.removeprefix("﻿")
     fmt = _detect(content, filename)
     result = ParseResult(format=fmt)
     {"jsonl": _parse_jsonl, "json": _parse_json, "csv": _parse_csv, "text": _parse_text}[fmt](

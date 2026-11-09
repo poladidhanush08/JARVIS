@@ -52,3 +52,15 @@ def test_csv_skips_invalid_rows_and_text_naive_is_utc():
     assert r.events == [] and r.skipped == 1
     t = parse_log_file("2026-11-09 10:00:05 info svc msg", "a.log")
     assert t.events[0].timestamp.utcoffset().total_seconds() == 0
+
+
+def test_deeply_nested_json_does_not_raise():
+    r = parse_log_file("[" * 200000, "x.json")
+    assert r.format == "json" and r.events == [] and r.skipped == 1
+    r = parse_log_file('{"a":' * 200000, "x.log")
+    assert r.format == "jsonl" and r.events == [] and r.skipped == 1
+
+
+def test_utf8_bom_is_stripped():
+    r = parse_log_file("\ufefftimestamp,service,level,message\n2026-11-09T10:00:00Z,a,info,m\n", "a.csv")
+    assert r.format == "csv" and len(r.events) == 1 and r.skipped == 0
