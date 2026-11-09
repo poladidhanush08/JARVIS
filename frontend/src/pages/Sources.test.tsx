@@ -166,3 +166,11 @@ test("upload failure shows the HttpError message inline", async () => {
   });
   expect(screen.getByRole("alert")).toHaveTextContent("Unsupported file format");
 });
+
+test("finished keeps the last scenario and speed and offers Play and Reset", async () => {
+  await renderWith(st({ state: "finished", scenario: "s2", speed: 10, emitted: 14, total: 14 }));
+  expect(screen.getByRole("combobox")).toHaveValue("s2");
+  expect(screen.getByRole("button", { name: "10x" })).toHaveAttribute("aria-pressed", "true");
+  expect(has("Play") && has("Reset")).toBe(true);
+  expect(has("Pause") || has("Resume")).toBe(false);
+});

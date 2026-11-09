@@ -24,7 +24,7 @@ function SimulatorCard() {
 
   const apply = useCallback((s: SimulatorStatus, seedScenario = false) => {
     setStatus(s);
-    if (s.state === "running" || s.state === "paused") {
+    if (s.state !== "idle") {
       setSpeed(s.speed);
       if (seedScenario && s.scenario) setScenarioId(s.scenario);
     }
@@ -151,7 +151,7 @@ function SimulatorCard() {
             Resume
           </button>
         )}
-        {active && (
+        {(active || state === "finished") && (
           <button type="button" className={btn} onClick={() => run(simulator.reset)}>
             <RotateCcw size={14} aria-hidden="true" />
             Reset

@@ -102,7 +102,7 @@ export default function EventsPage() {
             ))}
           </select>
         </label>
-        <label className="flex min-w-0 flex-1 flex-col gap-1 text-label text-muted">
+        <label className="flex min-w-0 flex-1 basis-48 flex-col gap-1 text-label text-muted">
           Search message
           <input
             type="search"
