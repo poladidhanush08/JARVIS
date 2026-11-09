@@ -1,0 +1,25 @@
+services:
+  web-frontend:
+    tier: frontend
+    depends_on: [api-gateway]
+  api-gateway:
+    tier: gateway
+    depends_on: [auth-service, payment-service, order-service]
+  auth-service:
+    tier: service
+    depends_on: [user-db]
+  payment-service:
+    tier: service
+    depends_on: [user-db, bank-gateway]
+  order-service:
+    tier: service
+    depends_on: [payment-service]
+  notification-service:
+    tier: service
+    depends_on: [order-service]
+  user-db:
+    tier: datastore
+    depends_on: []
+  bank-gateway:
+    tier: external
+    depends_on: []
