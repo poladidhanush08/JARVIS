@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, vi } from "vitest";
 import { HttpError, simulator, uploadLog } from "../lib/api";
+import { sessionId } from "../lib/session";
 import type { SimulatorStatus } from "../lib/types";
 import SourcesPage, { SCENARIO_RETRY_MS } from "./Sources";
 
@@ -231,4 +232,11 @@ test("keeps retrying the scenario list while the backend wakes up", async () => 
   expect(screen.getByText("Checkout outage")).toBeInTheDocument();
   expect(screen.queryByText(/Waiting for the analysis engine/)).not.toBeInTheDocument();
   expect(getScenarios).toHaveBeenCalledTimes(3);
+});
+
+test("the curl example carries this visitor's session header", async () => {
+  await renderWith(st({}));
+  const curl = screen.getByText(/^curl -X POST/);
+  expect(curl.textContent).toContain(`-H "X-Jarvis-Session: ${sessionId()}"`);
+  expect(screen.getByText(/appear on this dashboard/)).toBeInTheDocument();
 });

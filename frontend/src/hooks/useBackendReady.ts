@@ -12,7 +12,7 @@ async function ping(): Promise<boolean> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const res = await fetch(apiUrl("/api/stats"), { signal: ctrl.signal });
+    const res = await fetch(apiUrl("/api/health"), { signal: ctrl.signal });
     return res.ok;
   } catch {
     return false;

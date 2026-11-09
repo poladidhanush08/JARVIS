@@ -66,3 +66,8 @@ test("an update with zero raw alerts (engine reset) clears recent events", () =>
   expect(result.current.recentEvents).toHaveLength(0);
   expect(result.current.receivedAt.size).toBe(0);
 });
+
+test("connects with the visitor's session id in the query string", () => {
+  renderHook(() => useLive());
+  expect(FakeSocket.last!.url).toMatch(/\/ws\?session=[A-Za-z0-9_-]{8,64}$/);
+});

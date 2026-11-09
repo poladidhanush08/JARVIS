@@ -1,4 +1,5 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import ErrorBoundary from "./components/ErrorBoundary";
 import ConnectionBanner from "./components/ConnectionBanner";
 import Sidebar from "./components/Sidebar";
 import { useBackendReady } from "./hooks/useBackendReady";
@@ -16,6 +17,7 @@ export default function App() {
         <Sidebar />
         <main className="min-w-0 flex-1 p-6">
           <ConnectionBanner status={backend} />
+          <ErrorBoundary>
           <Routes>
             <Route path="/" element={<Incidents />} />
             <Route path="/incidents/:id" element={<IncidentPage />} />
@@ -23,6 +25,7 @@ export default function App() {
             <Route path="/events" element={<Events />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </ErrorBoundary>
         </main>
       </div>
     </BrowserRouter>

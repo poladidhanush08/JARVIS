@@ -5,15 +5,13 @@ import Card from "../components/Card";
 import CopyButton from "../components/CopyButton";
 import { getEvents, getScenarios, HttpError, simulator, uploadLog } from "../lib/api";
 import { publicApiOrigin } from "../lib/endpoint";
+import { SESSION_HEADER, sessionId } from "../lib/session";
 import type { Event, Scenario, SimulatorStatus, UploadResult } from "../lib/types";
 
 const SPEEDS = [1, 2, 5, 10];
 export const SCENARIO_RETRY_MS = 3000;
 const COUNT_LIMIT = 100_000;
-const EVENTS_ENDPOINT = `${publicApiOrigin()}/api/events`;
-const CURL =
-  `curl -X POST ${EVENTS_ENDPOINT} -H "Content-Type: application/json" ` +
-  `-d '{"service":"user-db","level":"error","message":"connection pool exhausted"}'`;
+const EVENTS_PATH = "/api/events";
 
 const btn =
   "inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-body hover:border-accent hover:text-accent focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50";
@@ -318,17 +316,23 @@ function UploadCard({ received, onActivity }: { received: number | null; onActiv
 }
 
 function ApiCard({ received }: { received: number | null }) {
+  const endpoint = `${publicApiOrigin()}${EVENTS_PATH}`;
+  const curl =
+    `curl -X POST ${endpoint} -H "Content-Type: application/json" ` +
+    `-H "${SESSION_HEADER}: ${sessionId()}" ` +
+    `-d '{"service":"user-db","level":"error","message":"connection pool exhausted"}'`;
   return (
     <Card className="flex flex-col gap-4">
       <CardHeader title="REST API" detail="Push events from any system" count={received} />
       <p className="text-label text-muted">
-        Send events with <code className="font-mono">POST {EVENTS_ENDPOINT}</code>
+        Send events with <code className="font-mono">POST {endpoint}</code>. Events sent with the{" "}
+        <code className="font-mono">{SESSION_HEADER}</code> header shown below appear on this dashboard.
       </p>
       <div className="flex items-start gap-2">
         <pre className="min-w-0 flex-1 overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-line bg-canvas p-3 font-mono text-[12px] leading-relaxed">
-          <code>{CURL}</code>
+          <code>{curl}</code>
         </pre>
-        <CopyButton text={CURL} what="curl example" />
+        <CopyButton text={curl} what="curl example" />
       </div>
     </Card>
   );

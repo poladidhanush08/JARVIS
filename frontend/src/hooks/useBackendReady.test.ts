@@ -50,3 +50,10 @@ test("a slow first answer shows waking until it arrives", async () => {
   });
   expect(result.current).toBe("ready");
 });
+
+test("pings /api/health", async () => {
+  fetchMock.mockResolvedValue({ ok: true });
+  renderHook(() => useBackendReady());
+  await act(async () => {});
+  expect(fetchMock.mock.calls[0][0]).toBe("/api/health");
+});

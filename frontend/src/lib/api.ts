@@ -10,6 +10,7 @@ import type {
   UploadResult,
 } from "./types";
 import { apiUrl } from "./endpoint";
+import { SESSION_HEADER, sessionId } from "./session";
 
 /** A non-2xx API response; `status` lets callers tell "not found" from other failures. */
 export class HttpError extends Error {
@@ -22,7 +23,9 @@ export class HttpError extends Error {
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(apiUrl(url), init);
+  const headers = new Headers(init?.headers);
+  headers.set(SESSION_HEADER, sessionId());
+  const res = await fetch(apiUrl(url), { ...init, headers });
   if (!res.ok) {
     let detail = res.statusText;
     try {
@@ -69,7 +72,7 @@ export function uploadLog(file: File) {
 
 export const postEvents = (body: EventIn | EventIn[]) => post<{ accepted: number }>("/api/events", body);
 
-export const reportUrl = (id: string) => apiUrl(`/api/incidents/${encodeURIComponent(id)}/report`);
+export const reportUrl = (id: string) => apiUrl(`/api/incidents/${encodeURIComponent(id)}/report?session=${encodeURIComponent(sessionId())}`);
 
 export const simulator = {
   start: (scenarioId: string, speed = 1) =>
