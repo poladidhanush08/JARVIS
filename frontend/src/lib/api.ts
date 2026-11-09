@@ -10,6 +10,16 @@ import type {
   UploadResult,
 } from "./types";
 
+/** A non-2xx API response; `status` lets callers tell "not found" from other failures. */
+export class HttpError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "HttpError";
+    this.status = status;
+  }
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   if (!res.ok) {
@@ -20,7 +30,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     } catch {
       /* non-JSON error body */
     }
-    throw new Error(detail || `HTTP ${res.status}`);
+    throw new HttpError(detail || `HTTP ${res.status}`, res.status);
   }
   return res.json() as Promise<T>;
 }
