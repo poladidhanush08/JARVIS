@@ -34,6 +34,8 @@ function live(recentEvents: Event[]) {
     stats: { raw_alerts: 0, incidents: 0, isolated: 0 },
     incidents: [],
     recentEvents,
+    receivedAt: new Map(),
+    snapshotIds: [],
     connected: true,
   });
 }
@@ -68,6 +70,17 @@ test("clicking a row shows reason chips with readable labels", async () => {
   expect(within(screen.getByRole("dialog")).getByRole("link", { name: "inc-1" })).toHaveAttribute("href", "/incidents/inc-1");
   fireEvent.keyDown(document, { key: "Escape" });
   expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+test("the founding event of an incident says it started it", async () => {
+  vi.mocked(getEvents).mockResolvedValue([row(ev("e1"), "inc-1", []), row(ev("e2"))]);
+  render(page());
+  await flush();
+  fireEvent.click(screen.getByRole("button", { name: "msg e1" }));
+  expect(within(screen.getByRole("dialog")).getByText("Started this incident")).toBeInTheDocument();
+  fireEvent.keyDown(document, { key: "Escape" });
+  fireEvent.click(screen.getByRole("button", { name: "msg e2" }));
+  expect(within(screen.getByRole("dialog")).queryByText("Started this incident")).toBeNull();
 });
 
 test("live events are merged newest first and deduped by id", async () => {

@@ -68,6 +68,8 @@ export interface Incident {
   correlation_reasons: Record<string, string[]>;
   runner_up_note: string;
   cause_phrase: string;
+  /** Wall clock (UTC) of the engine's last enrichment. */
+  updated_at: string | null;
 }
 
 export interface Stats {

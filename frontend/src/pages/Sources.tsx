@@ -1,5 +1,6 @@
 import { Pause, Play, RotateCcw, Upload } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Card from "../components/Card";
 import CopyButton from "../components/CopyButton";
 import { getScenarios, HttpError, simulator, uploadLog } from "../lib/api";
@@ -21,6 +22,7 @@ function SimulatorCard() {
   const [speed, setSpeed] = useState(1);
   const [status, setStatus] = useState<SimulatorStatus | null>(null);
   const [error, setError] = useState("");
+  const navigate = useNavigate();
 
   const apply = useCallback((s: SimulatorStatus, seedScenario = false) => {
     setStatus(s);
@@ -71,13 +73,19 @@ function SimulatorCard() {
     };
   }, [active, apply]);
 
-  const run = async (fn: () => Promise<SimulatorStatus>) => {
+  const run = async (fn: () => Promise<SimulatorStatus>): Promise<boolean> => {
     try {
       apply(await fn());
       setError("");
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Request failed.");
+      return false;
     }
+  };
+  // Go to Incidents so the collapse plays where it can be seen.
+  const play = async () => {
+    if (await run(() => simulator.start(scenarioId, speed))) navigate("/");
   };
   const chooseSpeed = (n: number) => {
     setSpeed(n);
@@ -133,7 +141,7 @@ function SimulatorCard() {
             type="button"
             className={primary}
             disabled={!scenarioId}
-            onClick={() => run(() => simulator.start(scenarioId, speed))}
+            onClick={play}
           >
             <Play size={14} aria-hidden="true" />
             Play

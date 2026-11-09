@@ -1,7 +1,7 @@
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, vi } from "vitest";
 import type { Event, Incident } from "../lib/types";
-import CollapseStream, { COLLAPSE_DURATION_MS, SNAPSHOT_GRACE_MS } from "./CollapseStream";
+import CollapseStream, { COLLAPSE_DURATION_MS } from "./CollapseStream";
 
 const T0 = new Date("2026-11-09T12:00:00Z");
 const FLIGHT_BUDGET_MS = 2000;
@@ -26,7 +26,17 @@ function inc(id: string, event_ids: string[]): Incident {
   return { id, event_ids, affected_services: [], root_cause_candidates: [] } as unknown as Incident;
 }
 
-function Harness({ events, incidents }: { events: Event[]; incidents: Incident[] }) {
+function Harness({
+  events,
+  incidents,
+  snapshotIds = [],
+  receivedAt,
+}: {
+  events: Event[];
+  incidents: Incident[];
+  snapshotIds?: string[] | null;
+  receivedAt?: Map<string, number>;
+}) {
   return (
     <>
       {incidents.map((i) => (
@@ -34,7 +44,7 @@ function Harness({ events, incidents }: { events: Event[]; incidents: Incident[]
           {i.id}
         </div>
       ))}
-      <CollapseStream recentEvents={events} incidents={incidents} />
+      <CollapseStream recentEvents={events} incidents={incidents} snapshotIds={snapshotIds} receivedAt={receivedAt} />
     </>
   );
 }
@@ -70,10 +80,9 @@ afterEach(() => {
 const cards = () => screen.queryAllByTestId("pending-card");
 const advance = (ms: number) => act(() => vi.advanceTimersByTime(ms));
 
-/** Mount with no incidents and let the snapshot grace window pass, then show two pending cards. */
+/** Mount after an empty snapshot, then show two pending cards. */
 function mountWithPending() {
   const view = render(<Harness events={[]} incidents={[]} />);
-  advance(SNAPSHOT_GRACE_MS + 100);
   const events = [ev("e1"), ev("e2")];
   view.rerender(<Harness events={events} incidents={[]} />);
   return { ...view, events };
@@ -130,22 +139,40 @@ test("with reduced motion the cards are removed without a flight", () => {
   expect(cards()).toHaveLength(0);
 });
 
-test("incidents present at mount never animate", () => {
+test("incidents in the first snapshot never animate", () => {
   const events = [ev("e1")];
-  const { rerender } = render(<Harness events={events} incidents={[inc("old", [])]} />);
-  advance(SNAPSHOT_GRACE_MS + 100);
+  const { rerender } = render(<Harness events={events} incidents={[inc("old", [])]} snapshotIds={["old"]} />);
+  advance(1500);
   expect(cards()).toHaveLength(1);
-  rerender(<Harness events={events} incidents={[inc("old", ["e1"])]} />);
+  rerender(<Harness events={events} incidents={[inc("old", ["e1"])]} snapshotIds={["old"]} />);
   expect(screen.queryByText("Grouping")).not.toBeInTheDocument();
   expect(cards()).toHaveLength(0);
 });
 
-test("an incident snapshot arriving just after events on load does not animate", () => {
+test("nothing animates before the snapshot; its incidents are seeded when it arrives", () => {
   const events = [ev("e1")];
-  const { rerender } = render(<Harness events={events} incidents={[]} />);
+  const { rerender } = render(<Harness events={events} incidents={[]} snapshotIds={null} />);
   expect(cards()).toHaveLength(1);
-  rerender(<Harness events={events} incidents={[inc("existing", ["e1"])]} />);
+  rerender(<Harness events={events} incidents={[inc("existing", ["e1"])]} snapshotIds={["existing"]} />);
   expect(screen.queryByText("Grouping")).not.toBeInTheDocument();
+  expect(cards()).toHaveLength(0);
+});
+
+test("an incident first seen right after an empty snapshot animates (no time grace)", () => {
+  const events = [ev("e1"), ev("e2")];
+  const { rerender } = render(<Harness events={[]} incidents={[]} snapshotIds={[]} />);
+  advance(100);
+  rerender(<Harness events={events} incidents={[]} snapshotIds={[]} />);
+  advance(400);
+  rerender(<Harness events={events} incidents={[inc("INC-001", ["e1", "e2"])]} snapshotIds={[]} />);
+  expect(screen.getByText("Grouping")).toBeInTheDocument();
+});
+
+test("the pending window follows client arrival time, not the event timestamp", () => {
+  const stale = { ...ev("e1"), timestamp: new Date(Date.now() - 3_600_000).toISOString() };
+  render(<Harness events={[stale]} incidents={[]} receivedAt={new Map([["e1", Date.now()]])} />);
+  expect(cards()).toHaveLength(1);
+  advance(11_000);
   expect(cards()).toHaveLength(0);
 });
 

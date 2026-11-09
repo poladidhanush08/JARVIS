@@ -38,6 +38,17 @@ test("pendingEvents keeps recent anomalous events not yet in an incident", () =>
   expect(ids).toEqual(["fresh-error", "fresh-alert", "fresh-warn", "fresh-critical"]);
 });
 
+test("pendingEvents ages events by client arrival time when known", () => {
+  // simulator timestamps are compressed and drift from the wall clock
+  const events = [ev("arrived-now", 3600), ev("arrived-long-ago", 0), ev("unknown", 2)];
+  const receivedAt = new Map([
+    ["arrived-now", NOW.getTime() - 1000],
+    ["arrived-long-ago", NOW.getTime() - 11_000],
+  ]);
+  const ids = pendingEvents(events, [], NOW, receivedAt).map((e) => e.id);
+  expect(ids).toEqual(["arrived-now", "unknown"]);
+});
+
 test("serviceStatus: root of any incident wins over impacted", () => {
   const incidents = [
     inc({ affected_services: ["api", "db"], root_cause_candidates: [{ service: "db" } as Incident["root_cause_candidates"][0]] }),

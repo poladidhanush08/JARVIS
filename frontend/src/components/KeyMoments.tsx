@@ -2,10 +2,10 @@ import { Play } from "lucide-react";
 import { tPlus } from "../lib/format";
 import type { KeyMoment } from "../lib/types";
 
-/** Dot colour: the first moment is the root's first anomaly; later ones are impacted services. */
-function dotClass(i: number, reached: boolean) {
+/** Dot colour: red for the top root-cause candidate's moment; others are impacted services. */
+function dotClass(isRoot: boolean, reached: boolean) {
   if (!reached) return "bg-healthy/50";
-  return i === 0 ? "bg-root" : "bg-impacted";
+  return isRoot ? "bg-root" : "bg-impacted";
 }
 
 export default function KeyMoments({
@@ -13,9 +13,12 @@ export default function KeyMoments({
   startTime,
   replayIndex,
   onReplay,
+  rootService,
 }: {
   moments: KeyMoment[];
   startTime: string;
+  /** Top root-cause candidate's service; its moment gets the red dot. */
+  rootService?: string;
   replayIndex: number | null;
   onReplay: () => void;
 }) {
@@ -48,11 +51,13 @@ export default function KeyMoments({
                 aria-current={current ? "step" : undefined}
                 className="flex min-w-24 flex-1 flex-col gap-1"
               >
-                <span className="text-label tabular-nums text-muted">{tPlus(m.timestamp, startTime)}</span>
+                <span title="seconds after the incident's first anomaly" className="text-label tabular-nums text-muted">
+                  {tPlus(m.timestamp, startTime)}
+                </span>
                 <span className="flex items-center gap-2">
                   <span
                     aria-hidden="true"
-                    className={`h-2.5 w-2.5 shrink-0 rounded-full transition-colors duration-200 ${dotClass(i, reached)} ${current ? "ring-2 ring-line ring-offset-1 ring-offset-surface" : ""}`}
+                    className={`h-2.5 w-2.5 shrink-0 rounded-full transition-colors duration-200 ${dotClass(m.service === rootService, reached)} ${current ? "ring-2 ring-line ring-offset-1 ring-offset-surface" : ""}`}
                   />
                   <span className="h-px flex-1 bg-line" aria-hidden="true" />
                 </span>

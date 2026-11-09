@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, vi } from "vitest";
 import { HttpError, simulator, uploadLog } from "../lib/api";
 import type { SimulatorStatus } from "../lib/types";
@@ -34,7 +35,14 @@ const st = (over: Partial<SimulatorStatus>): SimulatorStatus => ({
 
 async function renderWith(status: SimulatorStatus) {
   vi.mocked(simulator.status).mockResolvedValue(status);
-  const view = render(<SourcesPage />);
+  const view = render(
+    <MemoryRouter initialEntries={["/sources"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <Routes>
+        <Route path="/sources" element={<SourcesPage />} />
+        <Route path="/" element={<p>incidents page</p>} />
+      </Routes>
+    </MemoryRouter>,
+  );
   await act(async () => {});
   return view;
 }
@@ -173,4 +181,21 @@ test("finished keeps the last scenario and speed and offers Play and Reset", asy
   expect(screen.getByRole("button", { name: "10x" })).toHaveAttribute("aria-pressed", "true");
   expect(has("Play") && has("Reset")).toBe(true);
   expect(has("Pause") || has("Resume")).toBe(false);
+});
+
+test("Play starts the scenario and goes to Incidents; a failed start stays on Sources", async () => {
+  vi.mocked(simulator.start).mockRejectedValueOnce(new HttpError("Unknown scenario", 404));
+  await renderWith(st({}));
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+  });
+  expect(screen.getByText("Unknown scenario")).toBeInTheDocument();
+  expect(screen.queryByText("incidents page")).toBeNull();
+
+  vi.mocked(simulator.start).mockResolvedValueOnce(st({ state: "running", scenario: "s1", total: 10 }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+  });
+  expect(simulator.start).toHaveBeenLastCalledWith("s1", 1);
+  expect(screen.getByText("incidents page")).toBeInTheDocument();
 });

@@ -25,6 +25,9 @@ export default function ImpactCard({ impact }: { impact: Impact }) {
           source="minutes since the first event in this incident"
         />
       </ul>
+      {impact.endpoints.length > 0 && (
+        <p className="text-label text-muted">Endpoints: {impact.endpoints.join(", ")}</p>
+      )}
     </Card>
   );
 }

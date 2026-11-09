@@ -1,13 +1,31 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Event, Incident, Stats, WsMessage } from "../lib/types";
 
 const MAX_EVENTS = 50;
 const RECONNECT_MS = 1000;
 
-export function useLive(): { stats: Stats; incidents: Incident[]; recentEvents: Event[]; connected: boolean } {
+interface Received {
+  event: Event;
+  /** Client arrival time (ms). Simulator timestamps drift from the wall clock. */
+  at: number;
+}
+
+export interface Live {
+  stats: Stats;
+  incidents: Incident[];
+  recentEvents: Event[];
+  /** Client arrival time (ms) of each event in `recentEvents`, by event id. */
+  receivedAt: ReadonlyMap<string, number>;
+  /** Incident ids in the first snapshot frame; null until it arrives. */
+  snapshotIds: string[] | null;
+  connected: boolean;
+}
+
+export function useLive(): Live {
   const [stats, setStats] = useState<Stats>({ raw_alerts: 0, incidents: 0, isolated: 0 });
   const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [recentEvents, setRecentEvents] = useState<Event[]>([]);
+  const [received, setReceived] = useState<Received[]>([]);
+  const [snapshotIds, setSnapshotIds] = useState<string[] | null>(null);
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
@@ -27,8 +45,16 @@ export function useLive(): { stats: Stats; incidents: Incident[]; recentEvents: 
           return; // ignore malformed frames
         }
         if (msg.type === "events") {
-          setRecentEvents((prev) => [...[...msg.events].reverse(), ...prev].slice(0, MAX_EVENTS));
+          const at = Date.now();
+          const fresh = [...msg.events].reverse().map((event) => ({ event, at }));
+          setReceived((prev) => [...fresh, ...prev].slice(0, MAX_EVENTS));
         } else {
+          if (msg.type === "snapshot") {
+            const ids = msg.incidents.map((i) => i.id);
+            setSnapshotIds((prev) => prev ?? ids);
+          } else if (msg.stats.raw_alerts === 0) {
+            setReceived([]); // engine reset
+          }
           setStats(msg.stats);
           setIncidents(msg.incidents);
         }
@@ -47,5 +73,8 @@ export function useLive(): { stats: Stats; incidents: Incident[]; recentEvents: 
     };
   }, []);
 
-  return { stats, incidents, recentEvents, connected };
+  const recentEvents = useMemo(() => received.map((r) => r.event), [received]);
+  const receivedAt = useMemo(() => new Map(received.map((r) => [r.event.id, r.at])), [received]);
+
+  return { stats, incidents, recentEvents, receivedAt, snapshotIds, connected };
 }

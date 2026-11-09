@@ -56,7 +56,10 @@ export default function RootCauseCard({
         <span aria-hidden="true" className="h-2 w-2 shrink-0 translate-y-[-1px] rounded-full bg-root" />
         <span>{phrase ? `${candidate.service} — ${phrase}` : candidate.service}</span>
       </p>
-      <p className="text-label text-muted">
+      <p
+        className="text-label text-muted"
+        title="0.35 × came first + 0.30 × graph position + 0.20 × recent change + 0.15 × own fault"
+      >
         {confidenceLabel(candidate.confidence)} confidence, {candidate.confidence}%
       </p>
       <ul className="flex list-disc flex-col gap-1 pl-5 text-label">

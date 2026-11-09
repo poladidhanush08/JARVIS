@@ -11,7 +11,7 @@ export function nodeTooltip(service: string, events: Event[], startIso: string):
   const own = events.filter((e) => e.service === service);
   if (own.length === 0) return "No events in this incident";
   const first = firstEvent(own);
-  return `${own.length} events, first at ${tPlus(first.timestamp, startIso)}`;
+  return `${own.length} ${own.length === 1 ? "event" : "events"}, first at ${tPlus(first.timestamp, startIso)}`;
 }
 
 /** Hover label for an active edge: why the source is linked to the target. */
@@ -46,13 +46,23 @@ export function confidenceTrend(previous: number | undefined, current: number | 
   return previous !== undefined && current !== undefined && current > previous ? "rising" : "steady";
 }
 
-/** True when the live feed carries a newer version of the loaded incident. */
-export function needsRefetch(loaded: Incident | null, live: Incident[]): boolean {
+/**
+ * True when the live feed carries a newer version of the loaded incident (new events, or a
+ * re-rank that changed the top candidate, its confidence, severity or title), or when the
+ * incident was in the previous live list (`wasLive`) but is gone now (merged away or reset).
+ */
+export function needsRefetch(loaded: Incident | null, live: Incident[], wasLive = false): boolean {
   if (!loaded) return false;
   const fresh = live.find((i) => i.id === loaded.id);
+  if (!fresh) return wasLive;
+  const top = (i: Incident) => i.root_cause_candidates?.[0];
   return (
-    !!fresh &&
-    (fresh.last_event_time !== loaded.last_event_time || fresh.event_ids.length !== loaded.event_ids.length)
+    fresh.last_event_time !== loaded.last_event_time ||
+    fresh.event_ids.length !== loaded.event_ids.length ||
+    top(fresh)?.service !== top(loaded)?.service ||
+    top(fresh)?.confidence !== top(loaded)?.confidence ||
+    fresh.severity !== loaded.severity ||
+    fresh.title !== loaded.title
   );
 }
 

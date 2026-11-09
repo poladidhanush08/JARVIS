@@ -38,13 +38,16 @@ const incident: Incident = {
   correlation_reasons: {},
   runner_up_note: "",
   cause_phrase: "",
+  updated_at: null,
 };
 
-function mockLive(incidents: Incident[]) {
+function mockLive(incidents: Incident[], isolated = 3) {
   (useLive as Mock).mockReturnValue({
-    stats: { raw_alerts: 27, incidents: incidents.length, isolated: 3 },
+    stats: { raw_alerts: 27, incidents: incidents.length, isolated },
     incidents,
     recentEvents: [],
+    receivedAt: new Map(),
+    snapshotIds: [],
     connected: true,
   });
 }
@@ -72,6 +75,16 @@ test("shows headline numbers and the incident row", async () => {
   expect(await screen.findByLabelText("postgres: root cause")).toBeInTheDocument();
   expect(screen.getByLabelText("checkout: impacted")).toBeInTheDocument();
   expect(screen.getByLabelText("search: healthy")).toBeInTheDocument();
+});
+
+test("numbers explain their source on hover; counts are pluralized", async () => {
+  mockLive([{ ...incident, event_ids: ["e1"] }], 1);
+  renderPage();
+  expect(screen.getByTitle("warn/error/critical events and alerts received")).toHaveTextContent("27");
+  expect(screen.getByTitle("groups of 3 or more correlated alerts")).toHaveTextContent("1");
+  expect(screen.getByTitle("anomalous alerts that matched no incident")).toHaveTextContent("1 isolated alert not grouped");
+  expect(screen.getByTitle("events grouped into this incident")).toHaveTextContent("1 alert");
+  await screen.findByLabelText("search: healthy");
 });
 
 test("shows the empty state when there are no incidents", async () => {

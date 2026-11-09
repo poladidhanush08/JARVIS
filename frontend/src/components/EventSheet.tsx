@@ -74,6 +74,7 @@ export default function EventSheet({ row, onClose, assigning = false }: { row: E
           ) : (
             <p className="text-body text-muted">{assigning ? "Assigning to an incident…" : "Not part of any incident"}</p>
           )}
+          {incident_id && reasons.length === 0 && <p className="text-label text-muted">Started this incident</p>}
           {incident_id && reasons.length > 0 && (
             <ul className="flex flex-wrap gap-2" aria-label="Why it was grouped">
               {reasons.map((r) => (

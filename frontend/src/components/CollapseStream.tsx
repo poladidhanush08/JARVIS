@@ -4,8 +4,7 @@ import type { Event, Incident } from "../lib/types";
 
 export const COLLAPSE_DURATION_MS = 300;
 const TICK_MS = 1000;
-/** Incidents arriving this soon after mount are the initial snapshot, not new ones. */
-export const SNAPSHOT_GRACE_MS = 1000;
+const NO_ARRIVALS: ReadonlyMap<string, number> = new Map();
 
 interface FlyingCard {
   event: Event;
@@ -23,16 +22,30 @@ const findRow = (incidentId: string) =>
 /**
  * Anomalous events waiting to be grouped. When a new incident appears, the waiting cards
  * whose events it absorbed fly into its row (`[data-incident-row=id]`) once, then clear.
+ * Incidents in the first WebSocket snapshot (`snapshotIds`) are already known and never fly;
+ * nothing animates before that snapshot arrives.
  */
-export default function CollapseStream({ recentEvents, incidents }: { recentEvents: Event[]; incidents: Incident[] }) {
+export default function CollapseStream({
+  recentEvents,
+  incidents,
+  snapshotIds,
+  receivedAt = NO_ARRIVALS,
+}: {
+  recentEvents: Event[];
+  incidents: Incident[];
+  snapshotIds: string[] | null;
+  receivedAt?: ReadonlyMap<string, number>;
+}) {
   const [now, setNow] = useState(() => new Date());
   const [flight, setFlight] = useState<FlyingCard[] | null>(null);
-  const mountedAt = useRef(Date.now());
   const seen = useRef<Set<string> | null>(null);
   const lastShown = useRef<Event[]>([]);
   const cardEls = useRef(new Map<string, HTMLElement>());
 
-  const pending = useMemo(() => pendingEvents(recentEvents, incidents, now), [recentEvents, incidents, now]);
+  const pending = useMemo(
+    () => pendingEvents(recentEvents, incidents, now, receivedAt),
+    [recentEvents, incidents, now, receivedAt],
+  );
   const hasPending = pending.length > 0;
 
   // Tick only while cards are waiting, so expired cards (older than 10 s) drop out.
@@ -42,18 +55,11 @@ export default function CollapseStream({ recentEvents, incidents }: { recentEven
     return () => clearInterval(t);
   }, [hasPending]);
 
-  // Detect newly appeared incident ids. The initial snapshot (first non-empty list shortly
-  // after mount) seeds `seen` and never animates.
+  // Detect newly appeared incident ids; the first snapshot seeds `seen` once.
   useEffect(() => {
-    const ids = incidents.map((i) => i.id);
     if (seen.current === null) {
-      const inGrace = Date.now() - mountedAt.current < SNAPSHOT_GRACE_MS;
-      if (ids.length === 0 && inGrace) return;
-      if (inGrace) {
-        seen.current = new Set(ids);
-        return;
-      }
-      seen.current = new Set();
+      if (snapshotIds === null) return;
+      seen.current = new Set(snapshotIds);
     }
     const known = seen.current;
     const fresh = incidents.filter((i) => !known.has(i.id));
@@ -65,7 +71,7 @@ export default function CollapseStream({ recentEvents, incidents }: { recentEven
       return shown.filter((e) => absorbed.has(e.id)).map((event) => ({ event, incidentId: inc.id }));
     });
     if (flying.length > 0 && !prefersReducedMotion()) setFlight(flying);
-  }, [incidents]);
+  }, [incidents, snapshotIds]);
 
   useEffect(() => {
     if (!flight) lastShown.current = pending;

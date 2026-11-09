@@ -24,7 +24,7 @@ const events = [
 
 test("node tooltip counts events and first time", () => {
   expect(nodeTooltip("auth-service", events, start)).toBe("3 events, first at T+4s");
-  expect(nodeTooltip("user-db", events, start)).toBe("1 events, first at T+0s");
+  expect(nodeTooltip("user-db", events, start)).toBe("1 event, first at T+0s");
   expect(nodeTooltip("gateway", events, start)).toBe("No events in this incident");
   // compares instants, not ISO strings (11:00:03+01:00 is T+3s, earlier than 10:00:05Z)
   const mixed = [ev("m1", "cache", "a", 5), { ...ev("m2", "cache", "b", 0), timestamp: "2026-11-09T11:00:03+01:00" }];
@@ -73,6 +73,27 @@ test("needs refetch when the live copy changed", () => {
   expect(needsRefetch(loaded, [{ ...loaded, event_ids: ["x", "y"] }])).toBe(true);
   expect(needsRefetch(loaded, [{ ...loaded, id: "other", last_event_time: "b" }])).toBe(false);
   expect(needsRefetch(null, [{ ...loaded }])).toBe(false);
+});
+
+test("needs refetch when the engine re-ranks without new events", () => {
+  const cand = (service: string, confidence: number) => ({ service, confidence }) as Incident["root_cause_candidates"][0];
+  const loaded = {
+    id: "i1", last_event_time: "a", event_ids: ["x"], severity: "SEV2", title: "t", root_cause_candidates: [cand("db", 70)],
+  } as Incident;
+  expect(needsRefetch(loaded, [{ ...loaded, root_cause_candidates: [cand("db", 70)] }])).toBe(false);
+  expect(needsRefetch(loaded, [{ ...loaded, root_cause_candidates: [cand("api", 70)] }])).toBe(true);
+  expect(needsRefetch(loaded, [{ ...loaded, root_cause_candidates: [cand("db", 75)] }])).toBe(true);
+  expect(needsRefetch(loaded, [{ ...loaded, root_cause_candidates: [] }])).toBe(true);
+  expect(needsRefetch(loaded, [{ ...loaded, severity: "SEV1" }])).toBe(true);
+  expect(needsRefetch(loaded, [{ ...loaded, title: "u" }])).toBe(true);
+});
+
+test("needs refetch when the incident vanished from the live list it was in", () => {
+  const loaded = { id: "i1", last_event_time: "a", event_ids: ["x"] } as Incident;
+  const otherInc = { ...loaded, id: "i2" };
+  expect(needsRefetch(loaded, [otherInc], true)).toBe(true);
+  expect(needsRefetch(loaded, [], true)).toBe(true);
+  expect(needsRefetch(loaded, [otherInc], false)).toBe(false);
 });
 
 test("graph elements apply replay status, edge activity and hover label", () => {

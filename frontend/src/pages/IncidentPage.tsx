@@ -34,7 +34,7 @@ function StatusLine({ incident, trend }: { incident: Incident; trend: Trend }) {
   return (
     <p className="text-label text-muted">
       <span className="capitalize">{incident.status}</span> · confidence {trend} · updated{" "}
-      {relativeTime(incident.last_event_time, now)}
+      {relativeTime(incident.updated_at ?? incident.last_event_time, now)}
     </p>
   );
 }
@@ -165,9 +165,12 @@ function IncidentView({
   }, [fetchIncident]);
 
   const loaded = load.state === "ready" ? load.incident : null;
+  const wasLive = useRef(false); // seen in the previous live list, so vanishing means merged away or reset
   useEffect(() => {
-    if (!inFlight.current && needsRefetch(loaded, liveIncidents)) void fetchIncident();
-  }, [loaded, liveIncidents, fetchIncident]);
+    if (inFlight.current) return; // re-checked when the fetch lands and `loaded` changes
+    if (needsRefetch(loaded, liveIncidents, wasLive.current)) void fetchIncident();
+    wasLive.current = liveIncidents.some((i) => i.id === id);
+  }, [id, loaded, liveIncidents, fetchIncident]);
 
   const replay = useReplay(loaded?.key_moments.length ?? 0);
   const layout = useMemo(() => (graph && loaded ? graphLayout(graph, loaded) : null), [graph, loaded]);
@@ -224,6 +227,7 @@ function IncidentView({
               startTime={incident.start_time}
               replayIndex={replay.index}
               onReplay={replay.start}
+              rootService={top?.service}
             />
           </Card>
         </div>

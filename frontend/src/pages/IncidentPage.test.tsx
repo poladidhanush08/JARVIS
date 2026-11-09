@@ -61,10 +61,18 @@ const base: Incident = {
   correlation_reasons: {},
   runner_up_note: "",
   cause_phrase: "ran out of connections",
+  updated_at: null,
 };
 
 const live = (incidents: Incident[]) =>
-  (useLive as Mock).mockReturnValue({ stats: {}, incidents, recentEvents: [], connected: true });
+  (useLive as Mock).mockReturnValue({
+    stats: {},
+    incidents,
+    recentEvents: [],
+    receivedAt: new Map(),
+    snapshotIds: [],
+    connected: true,
+  });
 
 function renderPage(id = "inc-1") {
   return render(
@@ -201,4 +209,67 @@ test("navigating away resets replay and leaves no replay timer running", async (
   } finally {
     vi.useRealTimers();
   }
+});
+
+const rerenderPage = (view: ReturnType<typeof render>) =>
+  view.rerender(
+    <MemoryRouter initialEntries={["/incidents/inc-1"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <Routes>
+        <Route path="/incidents/:id" element={<IncidentPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+
+test("refetches when the engine re-ranks without new events", async () => {
+  (getIncident as Mock).mockResolvedValue({ incident: base, events: [] });
+  live([base]);
+  const view = renderPage();
+  expect(await screen.findByText("user-db — ran out of connections")).toBeInTheDocument();
+  const reranked: Incident = {
+    ...base,
+    title: "Logins failing because auth-service is failing",
+    root_cause_candidates: [{ ...base.root_cause_candidates[0], service: "auth-service", confidence: 60 }],
+    cause_phrase: "is failing",
+  };
+  (getIncident as Mock).mockResolvedValue({ incident: reranked, events: [] });
+  live([reranked]);
+  rerenderPage(view);
+  expect(await screen.findByRole("heading", { level: 1, name: reranked.title })).toBeInTheDocument();
+  expect(getIncident).toHaveBeenCalledTimes(2);
+});
+
+test("shows not-found once the incident disappears from the live list (merged or reset)", async () => {
+  (getIncident as Mock).mockResolvedValue({ incident: base, events: [] });
+  live([base]);
+  const view = renderPage();
+  expect(await screen.findByRole("heading", { level: 1, name: base.title })).toBeInTheDocument();
+  (getIncident as Mock).mockRejectedValue(new HttpError("Unknown incident inc-1", 404));
+  live([]);
+  rerenderPage(view);
+  expect(await screen.findByText("Incident not found")).toBeInTheDocument();
+});
+
+test("'updated' uses the engine's wall-clock updated_at; numbers explain themselves", async () => {
+  const updated = new Date(Date.now() - 4000).toISOString();
+  const incident: Incident = {
+    ...base,
+    updated_at: updated,
+    impact: { ...base.impact, endpoints: ["/login", "/pay"] },
+    key_moments: [
+      { timestamp: start, service: "auth-service", label: "auth-service affected", event_id: "e2" },
+      { timestamp: "2026-11-09T10:00:04Z", service: "user-db", label: "pool exhausted", event_id: "e1" },
+    ],
+  };
+  (getIncident as Mock).mockResolvedValue({ incident, events: [] });
+  renderPage();
+  expect(await screen.findByText(/updated 4 s ago/)).toBeInTheDocument();
+  expect(screen.getByText("Endpoints: /login, /pay")).toBeInTheDocument();
+  expect(screen.getByText(/confidence, 70%/)).toHaveAttribute("title", expect.stringContaining("0.35 × came first"));
+  expect(screen.getAllByTitle("seconds after the incident's first anomaly")).toHaveLength(2);
+  // the red dot follows the top root-cause candidate (user-db), not the first moment
+  const dots = screen
+    .getByRole("region", { name: "Key moments" })
+    .querySelectorAll("li > span:nth-child(2) > span:first-child");
+  expect(dots[0].className).toContain("bg-impacted");
+  expect(dots[1].className).toContain("bg-root");
 });

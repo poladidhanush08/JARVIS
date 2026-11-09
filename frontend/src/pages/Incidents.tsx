@@ -18,7 +18,9 @@ function IncidentRow({ incident }: { incident: Incident }) {
         <SeverityBadge severity={incident.severity} />
         <span className="min-w-0 flex-1 basis-48 break-words text-body font-semibold">{incident.title}</span>
         <span className="flex flex-wrap gap-x-4 gap-y-1 text-label text-muted">
-          <span>{incident.event_ids.length} alerts</span>
+          <span title="events grouped into this incident">
+            {incident.event_ids.length} {incident.event_ids.length === 1 ? "alert" : "alerts"}
+          </span>
           <span className="capitalize">{incident.status}</span>
           <span>{relativeTime(incident.start_time)}</span>
         </span>
@@ -27,17 +29,19 @@ function IncidentRow({ incident }: { incident: Incident }) {
   );
 }
 
-function Headline({ value, label }: { value: number; label: string }) {
+function Headline({ value, label, source }: { value: number; label: string; source: string }) {
   return (
     <div className="flex flex-col">
-      <span className="text-headline font-semibold tabular-nums">{value}</span>
+      <span title={source} className="text-headline font-semibold tabular-nums">
+        {value}
+      </span>
       <span className="text-label text-muted">{label}</span>
     </div>
   );
 }
 
 export default function IncidentsPage() {
-  const { stats, incidents, recentEvents } = useLive();
+  const { stats, incidents, recentEvents, receivedAt, snapshotIds } = useLive();
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-8">
@@ -46,10 +50,12 @@ export default function IncidentsPage() {
 
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap gap-x-12 gap-y-4">
-          <Headline value={stats.raw_alerts} label="raw alerts" />
-          <Headline value={stats.incidents} label="incidents" />
+          <Headline value={stats.raw_alerts} label="raw alerts" source="warn/error/critical events and alerts received" />
+          <Headline value={stats.incidents} label="incidents" source="groups of 3 or more correlated alerts" />
         </div>
-        <p className="text-label text-muted">{stats.isolated} isolated alerts not grouped</p>
+        <p className="text-label text-muted" title="anomalous alerts that matched no incident">
+          {stats.isolated} isolated {stats.isolated === 1 ? "alert" : "alerts"} not grouped
+        </p>
       </div>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_280px]">
@@ -69,7 +75,12 @@ export default function IncidentsPage() {
           </ul>
         )}
         <aside aria-label="Incoming alerts" className="min-w-0">
-          <CollapseStream recentEvents={recentEvents} incidents={incidents} />
+          <CollapseStream
+            recentEvents={recentEvents}
+            incidents={incidents}
+            snapshotIds={snapshotIds}
+            receivedAt={receivedAt}
+          />
         </aside>
       </div>
     </div>

@@ -34,7 +34,9 @@ parse are counted as skipped.
 
 ## Demo script: scenario A in 90 seconds
 
-1. **Sources** (0–10 s): pick *A · user-db pool exhaustion*, choose 10x, press Play.
+1. **Sources** (0–10 s): pick *A · user-db pool exhaustion*, choose 2x, press Play. J.A.R.V.I.S.
+   switches to the Incidents page. (2x is recommended: the cards have time to queue up before they
+   collapse; at 10x the incident forms almost at once.)
 2. **Incidents** (10–30 s): watch the alert cards fly into one incident card, then stop. Point at
    the headline: about 30 raw alerts, 1 incident; the CPU blip, the cert-expiry warning and the slow
    bank-gateway call stay outside as isolated alerts.
@@ -63,7 +65,7 @@ correlated and counted as raw alerts.
 
 An event joins the best-scoring incident if the score is at least **0.6**; otherwise it starts a new
 candidate. A candidate becomes an incident once it has 3 events (or one critical event). When an
-event matches two incidents, they are merged. The time window is **300 s**.
+event matches two incidents and both are already promoted, they are merged. The time window is **300 s**.
 
 **Root cause (RCA).** Every affected service in an incident gets a confidence score:
 
