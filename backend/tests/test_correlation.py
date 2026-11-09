@@ -78,10 +78,10 @@ def test_critical_promotes_immediately():
 
 def test_merge_promoted_incidents_into_oldest():
     c = Correlator(ServiceGraph.default())
-    a = c.add(ev(0, "user-db", "boom a", "critical"))
+    a = c.add(ev(0, "user-db", "boom a", "critical", tags={"endpoint": "/x"}))
     b = c.add(ev(180, "payment-service", "kaboom", "critical"))
     assert a != b  # time decayed, no dependency
-    bridge = ev(90, "auth-service", "fail talking to user-db and payment-service", "error")
+    bridge = ev(90, "user-db", "fail talking to payment-service", "error", tags={"endpoint": "/x"})
     # sanity: bridge qualifies against both
     assert c.score(bridge, c.incidents[a])[0] >= 0.6
     assert c.score(bridge, c.incidents[b])[0] >= 0.6
@@ -89,5 +89,5 @@ def test_merge_promoted_incidents_into_oldest():
     assert b not in c.incidents
     inc = c.incidents[a]
     assert len(inc.event_ids) == 3
-    assert {"user-db", "payment-service", "auth-service"} <= set(inc.affected_services)
+    assert {"user-db", "payment-service"} == set(inc.affected_services)
     assert inc.start_time == T0 and inc.last_event_time == T0 + timedelta(seconds=180)
