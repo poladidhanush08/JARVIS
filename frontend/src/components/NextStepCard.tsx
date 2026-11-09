@@ -1,41 +1,8 @@
-import { Check, ChevronDown, ChevronUp, Copy, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
+import { useState } from "react";
 import type { Recommendation } from "../lib/types";
 import Card from "./Card";
-
-const COPIED_MS = 1500;
-
-function CopyButton({ text }: { text: string }) {
-  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => () => clearTimeout(timer.current), []);
-
-  const copy = async () => {
-    let next: "copied" | "failed" = "copied";
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      next = "failed"; // clipboard unavailable or permission denied
-    }
-    setState(next);
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => setState("idle"), COPIED_MS);
-  };
-  const Icon = state === "copied" ? Check : state === "failed" ? X : Copy;
-  const label = state === "copied" ? "Copied" : state === "failed" ? "Copy failed" : "Copy";
-
-  return (
-    <button
-      type="button"
-      onClick={copy}
-      aria-label={state === "idle" ? `Copy command: ${text}` : label}
-      className="inline-flex shrink-0 items-center gap-1 rounded-md border border-line px-2 py-0.5 text-label text-muted hover:border-accent hover:text-accent focus-visible:outline-2 focus-visible:outline-accent"
-    >
-      <Icon size={14} aria-hidden="true" />
-      <span aria-live="polite">{label}</span>
-    </button>
-  );
-}
+import CopyButton from "./CopyButton";
 
 function Step({ rec, detailed }: { rec: Recommendation; detailed: boolean }) {
   return (
