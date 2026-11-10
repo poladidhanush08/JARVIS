@@ -34,7 +34,7 @@ CORS_ORIGIN_REGEX = os.environ.get("JARVIS_CORS_ORIGIN_REGEX", r"https://.*\.ver
 # Memory caps: one visitor must not be able to exhaust the (small) server.
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 MAX_EVENTS_PER_REQUEST = 5_000
-MAX_WORKSPACE_EVENTS = 50_000
+MAX_WORKSPACE_EVENTS = 10_000  # 50 workspaces x 10k events stays well inside a 512 MB instance
 
 
 class EventIn(BaseModel):

@@ -52,7 +52,7 @@ export default function AffectedPathList({
   }, [layout, incident, events, replayIndex]);
 
   return (
-    <div className="flex flex-col gap-3 px-5 py-4" role="group" aria-label="Affected services graph">
+    <div className="flex flex-col gap-3 px-5 py-4" role="group" aria-label="Affected services">
       <ol aria-label="Affected services" className="flex flex-col gap-2">
         {rows.map((r) => (
           <li

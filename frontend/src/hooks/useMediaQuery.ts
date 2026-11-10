@@ -11,8 +11,13 @@ export function useMediaQuery(query: string): boolean {
     const mql = window.matchMedia(query);
     const onChange = (e: { matches: boolean }) => setMatches(e.matches);
     setMatches(mql.matches);
-    mql.addEventListener("change", onChange);
-    return () => mql.removeEventListener("change", onChange);
+    // Safari before 14 only has the older addListener/removeListener API.
+    if (typeof mql.addEventListener === "function") {
+      mql.addEventListener("change", onChange);
+      return () => mql.removeEventListener("change", onChange);
+    }
+    mql.addListener(onChange);
+    return () => mql.removeListener(onChange);
   }, [query]);
 
   return matches;

@@ -236,4 +236,4 @@ def test_workspace_event_cap_is_413(client, monkeypatch):
 def test_cap_constants():
     import jarvis.api as api
 
-    assert (api.MAX_UPLOAD_BYTES, api.MAX_EVENTS_PER_REQUEST, api.MAX_WORKSPACE_EVENTS) == (5 * 1024 * 1024, 5000, 50000)
+    assert (api.MAX_UPLOAD_BYTES, api.MAX_EVENTS_PER_REQUEST, api.MAX_WORKSPACE_EVENTS) == (5 * 1024 * 1024, 5000, 10000)
