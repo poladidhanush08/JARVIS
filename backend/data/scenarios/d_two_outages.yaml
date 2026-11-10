@@ -1,0 +1,21 @@
+id: d_two_outages
+name: "D · two outages at once"
+description: A bad auth deploy breaks logins while the bank gateway fails payments. Two unrelated problems at the same time, kept apart.
+duration: 45
+# Two independent failures that overlap in time. They share no service, so a correct engine
+# reports two incidents. Noise (a slow query, a CPU blip) must join neither.
+steps:
+  # Outage 1: logins (auth-service deploy -> api-gateway /login -> web-frontend)
+  - {at: 0, service: auth-service, type: deploy, level: info, message: "auth-service v2.4.0"}
+  - {at: 5, service: auth-service, type: log, level: error, message: "config error: invalid JWT signing key", repeat: 4, every: 5, tags: {endpoint: /login}}
+  - {at: 9, service: auth-service, type: metric, level: error, message: "login failures 36%", metric: {name: failed_logins, value: 360}, repeat: 3, every: 10, tags: {endpoint: /login}}
+  - {at: 10, service: api-gateway, type: alert, level: error, message: "5xx rate 39% on /login", repeat: 2, every: 10, tags: {endpoint: /login}}
+  - {at: 18, service: web-frontend, type: alert, level: error, message: "login page errors calling api-gateway", repeat: 2, every: 10}
+  # Outage 2: payments (bank-gateway -> payment-service -> order-service)
+  - {at: 3, service: bank-gateway, type: alert, level: error, message: "health check failing: HTTP 503", repeat: 3, every: 12}
+  - {at: 7, service: payment-service, type: log, level: error, message: "timeout calling bank-gateway after 5000ms", repeat: 4, every: 6, tags: {endpoint: /pay}}
+  - {at: 12, service: payment-service, type: metric, level: error, message: "transaction failures 22%", metric: {name: failed_payments, value: 80}, repeat: 3, every: 10, tags: {endpoint: /pay}}
+  - {at: 16, service: order-service, type: log, level: warn, message: "retries calling payment-service (attempt 3)", repeat: 2, every: 12}
+  # Noise
+  - {at: 14, service: user-db, type: log, level: warn, message: "slow query 900ms"}
+  - {at: 20, service: notification-service, type: metric, level: warn, message: "CPU 88% for 20s", metric: {name: cpu_pct, value: 88}}

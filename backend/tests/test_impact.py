@@ -21,6 +21,10 @@ def test_severity_rules():
     assert severity(Impact(services=["api-gateway"]), g) == "SEV2"
     assert severity(Impact(services=["a", "b", "c"]), g) == "SEV3"
     assert severity(Impact(services=["user-db"]), g) == "SEV4"
+    # measured customer impact is SEV1 even when no user-facing service is involved
+    assert severity(Impact(failed_transactions=5, services=["payment-service", "bank-gateway"]), g) == "SEV1"
+    assert severity(Impact(users_affected=500, services=["auth-service"]), g) == "SEV1"
+    assert severity(Impact(users_affected=499, services=["auth-service"]), g) == "SEV4"
 
 
 def test_title():

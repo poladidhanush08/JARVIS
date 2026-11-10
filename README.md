@@ -90,6 +90,7 @@ notification → order.
 | A (hero) | user-db connection pool exhausted | login failures, slow checkout, failed payments; noise stays isolated |
 | B | bad deploy of auth-service v2.3.1 | login 401/500 spike right after a deploy event |
 | C | bank-gateway degraded (external) | payment failures only; logins healthy, user-db not blamed |
+| D | two outages at once: bad auth deploy **and** bank-gateway down | 2 separate SEV1 incidents with their own root causes; a slow query and a CPU blip stay excluded |
 
 ## Tests
 

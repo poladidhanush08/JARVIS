@@ -26,7 +26,9 @@ def compute_impact(incident_events: list[Event], now: datetime) -> Impact:
 
 def severity(impact: Impact, graph: ServiceGraph) -> str:
     user_facing = any(graph.tier(s) in USER_FACING_TIERS for s in impact.services)
-    if user_facing and (impact.failed_transactions >= 1 or impact.users_affected >= 500):
+    # Measured customer impact (failed payments, many blocked users) is SEV1 even when the
+    # failing services sit behind the gateway, e.g. a payment outage that never touches it.
+    if impact.failed_transactions >= 1 or impact.users_affected >= 500:
         return "SEV1"
     if user_facing:
         return "SEV2"

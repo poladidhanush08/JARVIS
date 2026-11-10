@@ -12,7 +12,7 @@ def run(sid):
 
 
 def test_list_scenarios_sorted():
-    assert [s.id for s in list_scenarios()] == ["a_db_pool", "b_bad_deploy", "c_bank_gateway"]
+    assert [s.id for s in list_scenarios()] == ["a_db_pool", "b_bad_deploy", "c_bank_gateway", "d_two_outages"]
 
 
 def test_events_are_deterministic_and_sorted():
@@ -46,3 +46,22 @@ def test_scenario_c_does_not_blame_db():
     e = run("c_bank_gateway")
     [inc] = e.incidents()
     assert "user-db" not in inc.affected_services
+
+
+def test_scenario_d_keeps_two_simultaneous_outages_apart():
+    e = run("d_two_outages")
+    incidents = e.incidents()
+    assert len(incidents) == 2
+    by_root = {i.root_cause_candidates[0].service: i for i in incidents}
+    assert set(by_root) == {"auth-service", "bank-gateway"}
+    logins, payments = by_root["auth-service"], by_root["bank-gateway"]
+    assert logins.root_cause_candidates[0].cause_type == "bad_deploy"
+    assert payments.root_cause_candidates[0].cause_type == "external_dependency"
+    assert logins.title == "Logins failing because auth-service had a bad deploy"
+    assert payments.title == "Payments failing because bank-gateway is degraded"
+    assert set(logins.affected_services) == {"auth-service", "api-gateway", "web-frontend"}
+    assert set(payments.affected_services) == {"bank-gateway", "payment-service", "order-service"}
+    assert logins.severity == payments.severity == "SEV1"
+    grouped = {m for i in incidents for m in (ev.message for ev in e.incident_events(i.id))}
+    assert not grouped & {"slow query 900ms", "CPU 88% for 20s"}
+    assert e.stats()["isolated"] == 2

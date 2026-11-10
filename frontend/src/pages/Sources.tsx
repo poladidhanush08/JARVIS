@@ -133,7 +133,7 @@ function SimulatorCard({ received, onActivity }: { received: number | null; onAc
   return (
     <Card className="flex flex-col gap-4">
       <CardHeader title="Simulator" detail="Replays a scripted incident as live events" count={received} />
-      <div role="radiogroup" aria-label="Scenario" className="grid grid-cols-1 gap-3 md:grid-cols-3">
+      <div role="radiogroup" aria-label="Scenario" className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         {scenarios.map((sc, i) => {
           const checked = sc.id === scenarioId;
           return (
