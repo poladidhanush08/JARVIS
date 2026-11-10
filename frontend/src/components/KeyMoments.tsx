@@ -39,11 +39,11 @@ export default function KeyMoments({
     : null;
   return (
     <section aria-label="Key moments" className="flex flex-col gap-1.5">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 sm:h-4 sm:flex-nowrap">
         <h2 className="text-label font-semibold uppercase tracking-wide text-muted">
           Key moments
         </h2>
-        <div className="ml-auto flex min-w-0 items-center gap-4">
+        <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-4 gap-y-1">
           <AlertRateChart
             events={events}
             startTime={startTime}

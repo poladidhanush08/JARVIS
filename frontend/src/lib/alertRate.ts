@@ -6,15 +6,26 @@ export interface RateBucket {
   count: number;
 }
 
+const MAX_BUCKETS = 2000;
+
 export function isAnomalous(e: Event): boolean {
-  return e.level === "warn" || e.level === "error" || e.level === "critical" || e.type === "alert";
+  return (
+    e.level === "warn" ||
+    e.level === "error" ||
+    e.level === "critical" ||
+    e.type === "alert"
+  );
 }
 
 /**
  * Anomalous events per `bucketS`-second window, from the first to the last anomalous event
  * inclusive (empty windows between are kept as zero). Order of `events` does not matter.
  */
-export function alertRate(events: Event[], startIso: string, bucketS = 5): RateBucket[] {
+export function alertRate(
+  events: Event[],
+  startIso: string,
+  bucketS = 5,
+): RateBucket[] {
   const start = Date.parse(startIso);
   const idx: number[] = [];
   for (const e of events) {
@@ -24,10 +35,16 @@ export function alertRate(events: Event[], startIso: string, bucketS = 5): RateB
     idx.push(Math.floor((ms - start) / 1000 / bucketS));
   }
   if (idx.length === 0) return [];
-  const lo = Math.min(...idx);
-  const hi = Math.max(...idx);
+  let lo = idx[0];
+  let hi = idx[0];
+  for (const i of idx) {
+    if (i < lo) lo = i;
+    if (i > hi) hi = i;
+  }
+  // A clock-skewed outlier must not allocate millions of empty buckets: keep the latest window.
+  if (hi - lo + 1 > MAX_BUCKETS) lo = hi - MAX_BUCKETS + 1;
   const out: RateBucket[] = [];
   for (let i = lo; i <= hi; i++) out.push({ t: i * bucketS, count: 0 });
-  for (const i of idx) out[i - lo].count += 1;
+  for (const i of idx) if (i >= lo) out[i - lo].count += 1;
   return out;
 }
