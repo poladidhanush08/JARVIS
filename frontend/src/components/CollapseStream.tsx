@@ -1,16 +1,18 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { collapseStagger, excludedEvents, pendingEvents } from "../lib/collapse";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  FLIGHT_MS,
+  INITIAL_COLLAPSE,
+  SETTLE_MS,
+  excludedEvents,
+  flightTiming,
+  rowsToFlash,
+  stepCollapse,
+  type CollapseInput,
+} from "../lib/collapse";
 import type { Event, Incident } from "../lib/types";
 
-export const COLLAPSE_DURATION_MS = 1200;
-const FADE_MS = 400;
-const TICK_MS = 1000;
+const FADE_MS = 150;
 const NO_ARRIVALS: ReadonlyMap<string, number> = new Map();
-
-interface FlyingCard {
-  event: Event;
-  incidentId: string;
-}
 
 const prefersReducedMotion = () =>
   typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -21,10 +23,11 @@ const findRow = (incidentId: string) =>
   );
 
 /**
- * Anomalous events waiting to be grouped. When a new incident appears, the waiting cards
- * whose events it absorbed fly into its row (`[data-incident-row=id]`) once, then clear.
- * Incidents in the first WebSocket snapshot (`snapshotIds`) are already known and never fly;
- * nothing animates before that snapshot arrives.
+ * Anomalous events waiting to be grouped. Every alert that arrives after the first WebSocket
+ * snapshot gets a card; once any listed incident absorbs it (new or existing) and it has been
+ * visible for the minimum dwell, it flies into that incident's row (`[data-incident-row=id]`).
+ * The choreography (dwell, cap, batches, snapshot rule) is the pure `stepCollapse`; this
+ * component only renders its state, runs one wake-up timer and plays the measured slides.
  */
 export default function CollapseStream({
   recentEvents,
@@ -37,72 +40,63 @@ export default function CollapseStream({
   snapshotIds: string[] | null;
   receivedAt?: ReadonlyMap<string, number>;
 }) {
-  const [now, setNow] = useState(() => new Date());
-  const [flight, setFlight] = useState<FlyingCard[] | null>(null);
-  const seen = useRef<Set<string> | null>(null);
-  const lastShown = useRef<Event[]>([]);
+  const input = useMemo(
+    () => ({ events: recentEvents, incidents, receivedAt, snapshotIds }),
+    [recentEvents, incidents, receivedAt, snapshotIds],
+  );
+  const latest = useRef(input);
+  const [state, setState] = useState(() =>
+    stepCollapse(INITIAL_COLLAPSE, { ...input, reducedMotion: prefersReducedMotion() }, Date.now()),
+  );
   const cardEls = useRef(new Map<string, HTMLElement>());
+  const lastFlash = useRef(new Map<string, number>());
+  const lastTops = useRef(new Map<string, number>());
 
-  const pending = useMemo(
-    () => pendingEvents(recentEvents, incidents, now, receivedAt),
-    [recentEvents, incidents, now, receivedAt],
-  );
-  const excluded = useMemo(
-    () => excludedEvents(recentEvents, incidents, now, receivedAt),
-    [recentEvents, incidents, now, receivedAt],
-  );
-  const hasPending = pending.length > 0;
+  const step = useCallback(() => {
+    const now = Date.now();
+    const next: CollapseInput = { ...latest.current, reducedMotion: prefersReducedMotion() };
+    setState((s) => stepCollapse(s, next, now));
+  }, []);
 
-  // Tick only while cards are waiting, so expired cards (older than 10 s) drop out.
+  // Step before paint whenever the live data changes, so a frame never shows stale cards.
+  useLayoutEffect(() => {
+    latest.current = input;
+    step();
+  }, [input, step]);
+
+  // The one timer: wake when a dwell ends, a batch lands or a card expires; none while idle.
   useEffect(() => {
-    if (!hasPending) return;
-    const t = setInterval(() => setNow(new Date()), TICK_MS);
-    return () => clearInterval(t);
-  }, [hasPending]);
+    if (state.nextWakeAt === null) return;
+    const timer = setTimeout(step, Math.max(0, state.nextWakeAt - Date.now()));
+    return () => clearTimeout(timer);
+  }, [state, step]);
 
-  // Detect newly appeared incident ids; the first snapshot seeds `seen` once.
-  useEffect(() => {
-    if (seen.current === null) {
-      if (snapshotIds === null) return;
-      seen.current = new Set(snapshotIds);
-    }
-    const known = seen.current;
-    const fresh = incidents.filter((i) => !known.has(i.id));
-    fresh.forEach((i) => known.add(i.id));
-    if (fresh.length === 0) return;
-    const shown = lastShown.current;
-    const flying = fresh.flatMap((inc) => {
-      const absorbed = new Set(inc.event_ids);
-      return shown.filter((e) => absorbed.has(e.id)).map((event) => ({ event, incidentId: inc.id }));
-    });
-    if (flying.length > 0 && !prefersReducedMotion()) setFlight(flying);
-  }, [incidents, snapshotIds]);
-
-  useEffect(() => {
-    if (!flight) lastShown.current = pending;
-  }, [pending, flight]);
-
-  // Run the flight: measure each card, then transition it into its target row.
+  // Play a batch: measure each card, then slide it into its target row and fade it out.
+  const { flight } = state;
   useLayoutEffect(() => {
     if (!flight) return;
-    const stagger = collapseStagger(flight.length, COLLAPSE_DURATION_MS);
     const frame = requestAnimationFrame(() => {
-      flight.forEach(({ event, incidentId }, i) => {
+      flight.cards.forEach(({ event, incidentId }, i) => {
         const el = cardEls.current.get(event.id);
         if (!el) return;
         const to = findRow(incidentId)?.getBoundingClientRect();
         const from = el.getBoundingClientRect();
         const dx = to ? to.left + 24 - from.left : 0;
         const dy = to ? to.top + to.height / 2 - (from.top + from.height / 2) : 0;
-        const delay = i * stagger;
-        // slide together into the incident card, then dissolve into it
-        el.style.transition = `transform ${COLLAPSE_DURATION_MS}ms cubic-bezier(0.22, 1, 0.36, 1) ${delay}ms, opacity ${FADE_MS}ms ease-out ${delay + COLLAPSE_DURATION_MS - FADE_MS}ms`;
+        const delay = i * flight.stagger;
+        el.style.transition = `transform ${FLIGHT_MS}ms ease-out ${delay}ms, opacity ${FADE_MS}ms ease-out ${delay + FLIGHT_MS - FADE_MS}ms`;
         el.style.transform = `translate(${dx}px, ${dy}px) scale(0.6)`;
         el.style.opacity = "0";
       });
-      // the receiving incident card flashes once as the alerts land
-      const targets = new Set(flight.map((c) => c.incidentId));
-      targets.forEach((id) => {
+      // the receiving rows flash as the alerts land, at most once per throttle window each
+      const now = Date.now();
+      const { total } = flightTiming(flight.cards.length);
+      rowsToFlash(
+        flight.cards.map((c) => c.incidentId),
+        lastFlash.current,
+        now,
+      ).forEach((id) => {
+        lastFlash.current.set(id, now);
         const row = findRow(id);
         if (row && typeof row.animate === "function") {
           row.animate(
@@ -111,29 +105,44 @@ export default function CollapseStream({
               { borderColor: "var(--accent)", offset: 0.6 },
               { borderColor: "var(--line)" },
             ],
-            {
-              duration: COLLAPSE_DURATION_MS + stagger * Math.max(0, flight.length - 1) + 300,
-              easing: "ease-out",
-            },
+            { duration: total + 300, easing: "ease-out" },
           );
         }
       });
     });
-    const total = COLLAPSE_DURATION_MS + stagger * Math.max(0, flight.length - 1);
-    const timer = setTimeout(() => setFlight(null), total);
-    return () => {
-      cancelAnimationFrame(frame);
-      clearTimeout(timer);
-    };
+    return () => cancelAnimationFrame(frame);
   }, [flight]);
 
-  const flyingIds = new Set(flight?.map((c) => c.event.id) ?? []);
-  const cards = [...(flight?.map((c) => c.event) ?? []), ...pending.filter((e) => !flyingIds.has(e.id))];
-  if (cards.length === 0 && excluded.length === 0) return null;
+  // When cards leave, the rest slide up into the freed space instead of jumping.
+  const order = state.shown.map((c) => c.event.id).join("\n");
+  useLayoutEffect(() => {
+    const flying = new Set(flight?.cards.map((c) => c.event.id) ?? []);
+    const reduce = prefersReducedMotion();
+    const tops = new Map<string, number>();
+    cardEls.current.forEach((el, id) => {
+      const top = el.offsetTop;
+      tops.set(id, top);
+      const before = lastTops.current.get(id);
+      if (reduce || flying.has(id) || before === undefined || before === top) return;
+      el.style.transition = "none";
+      el.style.transform = `translateY(${before - top}px)`;
+      void el.offsetHeight; // commit the start position before transitioning back
+      el.style.transition = `transform ${SETTLE_MS}ms ease-out`;
+      el.style.transform = "";
+    });
+    lastTops.current = tops;
+  }, [order, flight]);
+
+  const cards = state.shown.map((c) => c.event);
+  const excluded = useMemo(
+    () => excludedEvents(recentEvents, incidents, new Date(state.clock), receivedAt),
+    [recentEvents, incidents, state.clock, receivedAt],
+  );
+  if (cards.length === 0 && state.overflow === 0 && excluded.length === 0) return null;
 
   return (
     <div className="flex flex-col gap-6">
-      {cards.length > 0 && (
+      {(cards.length > 0 || state.overflow > 0) && (
         <section aria-label="Ungrouped alerts" className="flex flex-col gap-2">
           <h2 className="text-label font-semibold uppercase tracking-wide text-muted">
             {flight ? "Grouping" : "Waiting to be grouped"}
@@ -160,6 +169,9 @@ export default function CollapseStream({
               </li>
             ))}
           </ul>
+          {state.overflow > 0 && (
+            <p className="text-label text-muted tabular-nums">+{state.overflow} more arriving</p>
+          )}
         </section>
       )}
       {excluded.length > 0 && (
