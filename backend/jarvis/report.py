@@ -35,7 +35,7 @@ def render_markdown(incident: Incident, events: list[Event]) -> str:
     lines += ["", "## Root cause"]
     if incident.root_cause_candidates:
         top = incident.root_cause_candidates[0]
-        lines.append(f"**{top.service}** ({top.cause_type or 'unclassified'}), confidence {top.confidence}%")
+        lines.append(f"**{top.service}** ({top.cause_type or 'unclassified'}), confidence {top.confidence}% (evidence score {top.score}/100)")
         lines += [f"- {e}" for e in top.evidence]
         if incident.runner_up_note:
             lines.append(f"- {incident.runner_up_note}")

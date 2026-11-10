@@ -10,6 +10,7 @@ def test_report_has_all_sections(sample_incident, sample_events):
     assert "`kubectl set env deploy/user-db POOL_MAX=400`" in md
     assert "Verify: pool usage below 80%" in md
     assert "auth-service ranked lower" in md
+    assert "confidence 82% (evidence score 82/100)" in md
 
 
 def test_step_without_command_omits_backticks_line(sample_incident, sample_events):

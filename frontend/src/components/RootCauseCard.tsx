@@ -99,7 +99,7 @@ export default function RootCauseCard({
   candidate: RootCauseCandidate;
   phrase: string;
   runnerUp: string;
-  runnerUpCandidate?: { service: string; score: number };
+  runnerUpCandidate?: { service: string; score?: number };
 }) {
   const [open, setOpen] = useState(false);
   const evidence = open ? candidate.evidence : candidate.evidence.slice(0, 3);
@@ -175,10 +175,10 @@ export default function RootCauseCard({
           ))}
         </ul>
       )}
-      {open && (
+      {open && typeof candidate.score === "number" && (
         <p className="text-label text-muted tabular-nums">
           {`Evidence score ${candidate.score}/100`}
-          {runnerUpCandidate && ` · next best: ${runnerUpCandidate.service} ${runnerUpCandidate.score}/100`}
+          {runnerUpCandidate && typeof runnerUpCandidate.score === "number" && ` Â· next best: ${runnerUpCandidate.service} ${runnerUpCandidate.score}/100`}
         </p>
       )}
     </Card>

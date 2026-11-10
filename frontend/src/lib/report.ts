@@ -52,7 +52,7 @@ export function buildReport(incident: Incident): string {
 
   out.push("", "## Root cause", "");
   if (top) {
-    out.push(`**${top.service}** — ${top.cause_type || "—"}, confidence ${top.confidence}%`, "", "Evidence:", "");
+    out.push(`**${top.service}** — ${top.cause_type || "—"}, confidence ${top.confidence}%${typeof top.score === "number" ? ` (evidence score ${top.score}/100)` : ""}`, "", "Evidence:", "");
     if (top.evidence.length === 0) out.push("- —");
     for (const e of top.evidence) out.push(`- ${e}`);
     if (incident.runner_up_note) out.push("", `_${incident.runner_up_note}_`);

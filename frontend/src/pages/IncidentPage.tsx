@@ -289,7 +289,7 @@ function IncidentView({
               phrase={incident.cause_phrase}
               runnerUp={incident.runner_up_note}
               runnerUpCandidate={
-                incident.root_cause_candidates[1]
+                typeof incident.root_cause_candidates[1]?.score === "number"
                   ? { service: incident.root_cause_candidates[1].service, score: incident.root_cause_candidates[1].score }
                   : undefined
               }

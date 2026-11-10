@@ -28,7 +28,7 @@ test("root cause card shows verdict, confidence ring and top evidence", () => {
   expect(screen.getByText("x")).toBeInTheDocument();
   expect(screen.getByRole("meter", { name: "graph" })).toHaveAttribute("aria-valuenow", "100");
   expect(screen.getByRole("meter", { name: "change" })).toHaveAttribute("aria-valuenow", "0");
-  expect(screen.getByText("Evidence score 80/100 · next best: auth-service 49/100")).toBeInTheDocument();
+  expect(screen.getByText("Evidence score 80/100 Â· next best: auth-service 49/100")).toBeInTheDocument();
 });
 
 test("verdict omits the dash when there is no cause phrase", () => {
@@ -54,4 +54,18 @@ test("evidence score line omits next best when there is no runner-up", () => {
   );
   fireEvent.click(screen.getByText("Show evidence"));
   expect(screen.getByText("Evidence score 70/100")).toBeInTheDocument();
+});
+
+test("old backend without score: no evidence score line, no undefined", () => {
+  render(
+    <RootCauseCard
+      candidate={{ service: "user-db", cause_type: "", confidence: 70, factors: { first: 1 }, evidence: ["e"] }}
+      phrase=""
+      runnerUp=""
+      runnerUpCandidate={{ service: "auth-service" }}
+    />,
+  );
+  fireEvent.click(screen.getByText("Show evidence"));
+  expect(screen.queryByText(/Evidence score/)).not.toBeInTheDocument();
+  expect(document.body.textContent).not.toContain("undefined");
 });

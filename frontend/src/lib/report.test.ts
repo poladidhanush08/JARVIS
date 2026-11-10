@@ -39,6 +39,7 @@ test("report has every section, built from the incident", () => {
   for (const h of ["## Summary", "## Impact", "## Timeline", "## Root cause", "## Recommendations"]) expect(md).toContain(h);
   expect(md).toContain("- **Severity:** SEV1");
   expect(md).toContain("**user-db ran out of connections** (High confidence, 87%)");
+  expect(md).toContain("confidence 87% (evidence score 80/100)");
   expect(md).toContain("- Users affected: 1,200");
   expect(md).toContain("- Failed transactions: 34");
   expect(md).toContain("- T+5s (2026-11-09T10:00:05Z) — **user-db**: pool exhausted");
