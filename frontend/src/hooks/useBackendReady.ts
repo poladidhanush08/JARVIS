@@ -13,6 +13,12 @@ async function ping(): Promise<boolean> {
   const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
   try {
     const res = await fetch(apiUrl("/api/health"), { signal: ctrl.signal });
+    // A backend older than /api/health answers 404 while it is perfectly awake (e.g. the
+    // frontend deployed before the backend finished). Fall back to an endpoint it has.
+    if (res.status === 404) {
+      const old = await fetch(apiUrl("/api/scenarios"), { signal: ctrl.signal });
+      return old.ok;
+    }
     return res.ok;
   } catch {
     return false;

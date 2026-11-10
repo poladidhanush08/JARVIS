@@ -57,3 +57,13 @@ test("pings /api/health", async () => {
   await act(async () => {});
   expect(fetchMock.mock.calls[0][0]).toBe("/api/health");
 });
+
+test("an older backend without /api/health still counts as ready", async () => {
+  fetchMock.mockImplementation((url: string) =>
+    Promise.resolve(String(url).endsWith("/api/health") ? { ok: false, status: 404 } : { ok: true, status: 200 }),
+  );
+  const { result } = renderHook(() => useBackendReady());
+  await act(async () => {});
+  expect(result.current).toBe("ready");
+  expect(fetchMock.mock.calls.map(([u]) => String(u))).toEqual(["/api/health", "/api/scenarios"]);
+});
