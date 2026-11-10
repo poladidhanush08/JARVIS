@@ -20,7 +20,7 @@ const primary =
 
 function CardHeader({ title, detail, count }: { title: string; detail: string; count: number | null }) {
   return (
-    <div className="flex items-start justify-between gap-4">
+    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
       <div className="flex flex-col gap-0.5">
         <h2 className="text-title font-semibold">{title}</h2>
         <p className="text-label text-muted">{detail}</p>
@@ -162,7 +162,7 @@ function SimulatorCard({ received, onActivity }: { received: number | null; onAc
           );
         })}
       </div>
-      <div role="group" aria-label="Speed" className="flex items-center gap-2">
+      <div role="group" aria-label="Speed" className="flex flex-wrap items-center gap-2">
         <span className="text-label text-muted">Speed</span>
         {SPEEDS.map((n) => (
           <button
@@ -325,7 +325,7 @@ function ApiCard({ received }: { received: number | null }) {
     <Card className="flex flex-col gap-4">
       <CardHeader title="REST API" detail="Push events from any system" count={received} />
       <p className="text-label text-muted">
-        Send events with <code className="font-mono">POST {endpoint}</code>. Events sent with the{" "}
+        Send events with <code className="break-all font-mono">POST {endpoint}</code>. Events sent with the{" "}
         <code className="font-mono">{SESSION_HEADER}</code> header shown below appear on this dashboard.
       </p>
       <div className="flex items-start gap-2">
