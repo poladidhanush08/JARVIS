@@ -51,7 +51,8 @@ class Event(BaseModel):
 class RootCauseCandidate(BaseModel):
     service: str
     cause_type: str
-    confidence: int = Field(ge=0, le=99)
+    score: int = Field(ge=0, le=99)  # raw evidence score
+    confidence: int = Field(ge=0, le=99)  # how decisively this candidate wins (softmax of scores)
     factors: dict[str, float] = Field(default_factory=dict)  # keys: first, graph, change, own
     evidence: list[str] = Field(default_factory=list)
 

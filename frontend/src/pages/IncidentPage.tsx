@@ -288,6 +288,11 @@ function IncidentView({
               candidate={top}
               phrase={incident.cause_phrase}
               runnerUp={incident.runner_up_note}
+              runnerUpCandidate={
+                incident.root_cause_candidates[1]
+                  ? { service: incident.root_cause_candidates[1].service, score: incident.root_cause_candidates[1].score }
+                  : undefined
+              }
             />
           ) : (
             <Card className="flex flex-col gap-2">

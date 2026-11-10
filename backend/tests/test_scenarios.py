@@ -65,3 +65,15 @@ def test_scenario_d_keeps_two_simultaneous_outages_apart():
     grouped = {m for i in incidents for m in (ev.message for ev in e.incident_events(i.id))}
     assert not grouped & {"slow query 900ms", "CPU 88% for 20s"}
     assert e.stats()["isolated"] == 2
+
+
+def _top_pairs(sid):
+    return sorted(((c.service, c.score, c.confidence) for i in run(sid).incidents() for c in i.root_cause_candidates[:1]))
+
+
+def test_confidence_pinned_per_scenario():
+    # (service, evidence score, confidence = softmax share, K=10)
+    assert _top_pairs("a_db_pool") == [("user-db", 80, 89)]
+    assert _top_pairs("b_bad_deploy") == [("auth-service", 99, 99)]
+    assert _top_pairs("c_bank_gateway") == [("bank-gateway", 80, 93)]
+    assert _top_pairs("d_two_outages") == [("auth-service", 99, 99), ("bank-gateway", 80, 94)]

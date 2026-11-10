@@ -5,7 +5,7 @@ from jarvis.playbook import Playbook
 
 
 def _root(service, change=0):
-    return RootCauseCandidate(service=service, cause_type="", confidence=80, factors={"first": 1, "graph": 1, "change": change, "own": 1}, evidence=[])
+    return RootCauseCandidate(service=service, cause_type="", score=80, confidence=80, factors={"first": 1, "graph": 1, "change": change, "own": 1}, evidence=[])
 
 
 def test_cause_type_and_recommendations():

@@ -30,7 +30,7 @@ function inc(id: string, start: string, service: string, confidence: number, pro
     event_ids: [],
     affected_services: [service],
     promoted,
-    root_cause_candidates: [{ service, cause_type: "resource", confidence, factors: {}, evidence: [] }],
+    root_cause_candidates: [{ service, cause_type: "resource", score: confidence, confidence, factors: {}, evidence: [] }],
     impact: { users_affected: 0, failed_transactions: 0, endpoints: [], services: [], minutes_since_start: 0 },
     recommendations: [],
     key_moments: [],

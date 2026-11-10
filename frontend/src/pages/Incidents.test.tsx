@@ -42,7 +42,7 @@ const incident: Incident = {
   affected_services: ["postgres", "checkout"],
   promoted: true,
   root_cause_candidates: [
-    { service: "postgres", cause_type: "resource", confidence: 88, factors: {}, evidence: [] },
+    { service: "postgres", cause_type: "resource", score: 80, confidence: 88, factors: {}, evidence: [] },
   ],
   impact: { users_affected: 0, failed_transactions: 0, endpoints: [], services: [], minutes_since_start: 2 },
   recommendations: [],

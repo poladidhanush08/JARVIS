@@ -64,3 +64,21 @@ def test_runner_up_points_at_most_named_service_overall():
     c = rank_root_causes(evs, evs, ServiceGraph.default())
     assert c[1].service == "payment-service"
     assert runner_up_note(c, evs) == "payment-service ranked lower: its errors point at user-db"
+
+
+def test_confidence_is_softmax_over_raw_scores():
+    from jarvis.rca import CONFIDENCE_TEMPERATURE, softmax_confidences
+
+    assert CONFIDENCE_TEMPERATURE == 10
+    assert softmax_confidences([0.60, 0.55]) == [62, 38]  # close call -> Medium
+    assert softmax_confidences([0.80]) == [80]  # single candidate: confidence == score
+    assert softmax_confidences([0.99, 0.0])[0] == 99  # capped
+    assert softmax_confidences([1.0, 1.0]) == [50, 50]
+
+
+def test_score_keeps_raw_formula_and_confidence_diverges():
+    evs = [ev(0, "user-db", "connection pool exhausted", "warn"), ev(5, "auth-service", "DB timeout after 2000ms on user-db")]
+    c = rank_root_causes(evs, evs, ServiceGraph.default())
+    assert c[0].score >= c[1].score
+    assert c[0].confidence != c[0].score
+    assert [x.score for x in c] == sorted((x.score for x in c), reverse=True)

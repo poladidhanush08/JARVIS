@@ -1,9 +1,21 @@
+import math
 from collections import Counter
 
 from jarvis.graph import ServiceGraph
 from jarvis.models import Event, RootCauseCandidate
 
 DEPLOY_WINDOW_S = 600
+CONFIDENCE_TEMPERATURE = 10
+
+
+def softmax_confidences(scores: list[float]) -> list[int]:
+    """Percent chance each raw (0-1) score is the true cause; one candidate keeps its own score."""
+    if len(scores) == 1:
+        return [min(99, round(100 * scores[0]))]
+    m = max(scores)
+    exps = [math.exp(CONFIDENCE_TEMPERATURE * (s - m)) for s in scores]
+    total = sum(exps)
+    return [min(99, round(100 * x / total)) for x in exps]
 
 
 def _names(message: str, service: str) -> bool:
@@ -35,6 +47,7 @@ def rank_root_causes(
     affected = list(by_service)
 
     out: list[RootCauseCandidate] = []
+    raw: list[float] = []
     for s, evs in by_service.items():
         onset = evs[0].timestamp
         onset_s = int((onset - t0).total_seconds())
@@ -53,7 +66,8 @@ def rank_root_causes(
         own = len(own_msgs) / len(evs)
 
         factors = {"first": first, "graph": g, "change": change, "own": own}
-        conf = min(99, round(100 * (0.35 * first + 0.30 * g + 0.20 * change + 0.15 * own)))
+        raw_score = 0.35 * first + 0.30 * g + 0.20 * change + 0.15 * own
+        raw.append(raw_score)
 
         evidence: list[str] = []
         if first > 0:
@@ -66,9 +80,11 @@ def rank_root_causes(
             evidence.append(f"Deployed {deploy.message} {int((onset - deploy.timestamp).total_seconds())}s before onset")
         if own > 0:
             evidence.append(f'Its own errors: "{_most_common(own_msgs)}"')
-        out.append(RootCauseCandidate(service=s, cause_type="", confidence=conf, factors=factors, evidence=evidence))
+        out.append(RootCauseCandidate(service=s, cause_type="", score=min(99, round(100 * raw_score)), confidence=0, factors=factors, evidence=evidence))
 
-    out.sort(key=lambda c: (-c.confidence, c.service))
+    for c, conf in zip(out, softmax_confidences(raw)):
+        c.confidence = conf
+    out.sort(key=lambda c: (-c.score, c.service))
     return out
 
 

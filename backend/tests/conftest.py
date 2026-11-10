@@ -31,7 +31,7 @@ def sample_incident(sample_events):
     g, pb = ServiceGraph.default(), Playbook.default()
     impact = compute_impact(sample_events, now=T0 + timedelta(minutes=4))
     root = RootCauseCandidate(
-        service="user-db", cause_type="", confidence=82,
+        service="user-db", cause_type="", score=82, confidence=82,
         factors={"first": 1, "graph": 1, "change": 0, "own": 1},
         evidence=["First anomaly in the incident", "3 of 3 other affected services depend on it"],
     )

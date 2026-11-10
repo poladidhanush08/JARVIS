@@ -16,6 +16,7 @@ const incident: Incident = {
     {
       service: "user-db",
       cause_type: "db_pool_exhaustion",
+      score: 80,
       confidence: 87,
       factors: {},
       evidence: ["First anomaly at T+0s", "auth-service errors name user-db"],

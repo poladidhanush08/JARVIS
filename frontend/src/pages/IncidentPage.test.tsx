@@ -50,7 +50,7 @@ const base: Incident = {
   affected_services: ["user-db", "auth-service"],
   promoted: true,
   root_cause_candidates: [
-    { service: "user-db", cause_type: "db_pool_exhaustion", confidence: 70, factors: {}, evidence: ["a"] },
+    { service: "user-db", cause_type: "db_pool_exhaustion", score: 70, confidence: 70, factors: {}, evidence: ["a"] },
   ],
   impact: { users_affected: 1200, failed_transactions: 0, endpoints: [], services: [], minutes_since_start: 3 },
   recommendations: [],

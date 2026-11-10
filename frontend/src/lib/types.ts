@@ -23,6 +23,9 @@ export interface Event {
 export interface RootCauseCandidate {
   service: string;
   cause_type: string;
+  /** Raw evidence score, 0-99. */
+  score: number;
+  /** How decisively this candidate wins (softmax share), 0-99. */
   confidence: number;
   factors: Record<string, number>;
   evidence: string[];
