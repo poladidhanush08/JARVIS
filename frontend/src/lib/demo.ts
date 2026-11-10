@@ -56,7 +56,12 @@ const STAGE_MESSAGES: Record<Exclude<DemoStage, 4>, string> = {
   3: "Grouping alerts",
 };
 
-/** Screen-reader message for a stage: stable while counts climb; the final sentence once. */
+/**
+ * Screen-reader message for a stage: stable while counts climb. The final message is announced
+ * once, the moment the root cause is found, so it leaves out the alert count, which keeps rising.
+ */
 export function demoAnnouncement(caption: DemoCaption): string {
-  return caption.stage === 4 ? caption.text : STAGE_MESSAGES[caption.stage];
+  if (caption.stage !== 4) return STAGE_MESSAGES[caption.stage];
+  const [, verdict] = caption.text.split(" → ");
+  return verdict ? `Grouped into ${verdict}` : caption.text;
 }

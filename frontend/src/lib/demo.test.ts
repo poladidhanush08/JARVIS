@@ -96,5 +96,10 @@ test("announcements name the stage, not the live counts", () => {
   expect(demoAnnouncement({ stage: 2, text: "9 alerts arriving from 3 services…" })).toBe("Alerts arriving");
   expect(demoAnnouncement({ stage: 3, text: "Grouping related alerts into one incident…" })).toBe("Grouping alerts");
   const done = "27 alerts → 1 incident. Root cause: postgres (High, 88%)";
-  expect(demoAnnouncement({ stage: 4, text: done, incidentId: "inc-1" })).toBe(done);
+  expect(demoAnnouncement({ stage: 4, text: done, incidentId: "inc-1" })).toBe(
+    "Grouped into 1 incident. Root cause: postgres (High, 88%)",
+  );
+  expect(
+    demoAnnouncement({ stage: 4, text: "40 alerts → 2 incidents. Top root cause: redis (Medium, 60%)", incidentId: "i" }),
+  ).toBe("Grouped into 2 incidents. Top root cause: redis (Medium, 60%)");
 });

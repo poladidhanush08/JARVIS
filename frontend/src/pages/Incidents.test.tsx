@@ -163,7 +163,7 @@ test("Run the demo starts scenario A at 2x and shows live captions", async () =>
   rerenderPage(view);
   const done = "27 alerts → 1 incident. Root cause: postgres (High, 88%)";
   expect(screen.getByTestId("demo-caption")).toHaveTextContent(done);
-  expect(screen.getByRole("status")).toHaveTextContent(done);
+  expect(screen.getByRole("status")).toHaveTextContent("Grouped into 1 incident. Root cause: postgres (High, 88%)");
   expect(within(screen.getByTestId("demo-caption")).getByRole("link", { name: "Open the incident" })).toHaveAttribute(
     "href",
     "/incidents/inc-1",
