@@ -1,4 +1,7 @@
+import { isAnomalous } from "./collapse";
 import type { Event } from "./types";
+
+export { isAnomalous };
 
 export interface RateBucket {
   /** Bucket start, seconds after the incident's first anomaly. */
@@ -7,15 +10,6 @@ export interface RateBucket {
 }
 
 const MAX_BUCKETS = 2000;
-
-export function isAnomalous(e: Event): boolean {
-  return (
-    e.level === "warn" ||
-    e.level === "error" ||
-    e.level === "critical" ||
-    e.type === "alert"
-  );
-}
 
 /**
  * Anomalous events per `bucketS`-second window, from the first to the last anomalous event

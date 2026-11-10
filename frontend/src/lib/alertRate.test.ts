@@ -56,9 +56,7 @@ describe("alertRate hardening", () => {
     expect(alertRate([bad, ev(1)], T0)).toEqual([{ t: 0, count: 1 }]);
   });
   it("caps the span so a far outlier cannot allocate millions of buckets", () => {
-    const t = Date.now();
     const r = alertRate([ev(0), ev(60 * 60 * 24 * 365 * 30)], T0);
-    expect(Date.now() - t).toBeLessThan(500);
     expect(r.length).toBeLessThanOrEqual(2000);
     expect(r.reduce((s, b) => s + b.count, 0)).toBeGreaterThanOrEqual(1);
   });

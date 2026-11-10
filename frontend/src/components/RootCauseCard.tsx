@@ -14,6 +14,7 @@ const FACTOR_HINT: Record<string, string> = {
   own: "errors that name no other service",
 };
 const FORMULA = "0.35 × came first + 0.30 × graph position + 0.20 × recent change + 0.15 × own fault";
+const CONFIDENCE_HINT = "how decisively this cause beats the other candidates (softmax of their evidence scores)";
 const RING_R = 22;
 const RING_C = 2 * Math.PI * RING_R;
 
@@ -81,7 +82,7 @@ function ConfidenceRing({ confidence }: { confidence: number }) {
         )}
       </svg>
       <div className="flex flex-col">
-        <span title={FORMULA} className="text-title font-semibold tabular-nums">
+        <span title={CONFIDENCE_HINT} className="text-title font-semibold tabular-nums">
           {word}, {shown}%
         </span>
         <span className="text-label text-muted">confidence</span>
@@ -169,14 +170,14 @@ export default function RootCauseCard({
         </p>
       )}
       {open && factors.length > 0 && (
-        <ul id="root-cause-detail" aria-label="Confidence factors" className="flex flex-col gap-1" title={FORMULA}>
+        <ul id="root-cause-detail" aria-label="Evidence factors" className="flex flex-col gap-1" title={FORMULA}>
           {factors.map((k) => (
             <FactorBar key={k} name={k} value={candidate.factors[k]} />
           ))}
         </ul>
       )}
       {open && typeof candidate.score === "number" && (
-        <p className="text-label text-muted tabular-nums">
+        <p title={FORMULA} className="text-label text-muted tabular-nums">
           {`Evidence score ${candidate.score}/100`}
           {runnerUpCandidate && typeof runnerUpCandidate.score === "number" && ` · next best: ${runnerUpCandidate.service} ${runnerUpCandidate.score}/100`}
         </p>

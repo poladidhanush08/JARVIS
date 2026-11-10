@@ -64,8 +64,6 @@ export interface Flight {
 }
 
 export interface CollapseState {
-  /** Time the pending window is measured at: frozen while a batch flies so nothing shifts under it. */
-  clock: number;
   /** Event ids present before the first snapshot: they never fly. null until the snapshot arrives. */
   history: ReadonlySet<string> | null;
   /** Cards on screen in display order (oldest first, flying ones included). */
@@ -98,7 +96,6 @@ export interface CollapseInput {
 }
 
 export const INITIAL_COLLAPSE: CollapseState = {
-  clock: 0,
   history: null,
   shown: [],
   flown: new Set(),
@@ -251,7 +248,6 @@ export function stepCollapse(prev: CollapseState, input: CollapseInput, now: num
   const nextWakeAt = wakes.length > 0 ? Math.max(now + 1, Math.min(...wakes)) : null;
 
   return {
-    clock,
     history,
     shown,
     flown,

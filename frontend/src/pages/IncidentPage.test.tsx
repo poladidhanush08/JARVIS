@@ -265,7 +265,7 @@ test("'updated' uses the engine's wall-clock updated_at; numbers explain themsel
   expect(await screen.findByText(/updated 4 s ago/)).toBeInTheDocument();
   expect(screen.getByText("/login")).toBeInTheDocument();
   expect(screen.getByText("/pay")).toBeInTheDocument();
-  expect(screen.getByText("Medium, 70%")).toHaveAttribute("title", expect.stringContaining("0.35 × came first"));
+  expect(screen.getByText("Medium, 70%")).toHaveAttribute("title", expect.stringContaining("beats the other candidates"));
   expect(screen.getAllByTitle("seconds after the incident's first anomaly")).toHaveLength(2);
   // the red dot follows the top root-cause candidate (user-db), not the first moment
   const dots = screen

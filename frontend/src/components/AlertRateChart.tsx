@@ -69,7 +69,7 @@ export default function AlertRateChart({
         viewBox={`0 0 ${W} ${H}`}
         className="max-w-full overflow-visible"
       >
-        <title>anomalous alerts in this incident, per 5-second window</title>
+        <title>{`anomalous alerts in this incident, per ${bucketS}-second window`}</title>
         <line
           x1={0}
           x2={W}

@@ -9,7 +9,8 @@ CONFIDENCE_TEMPERATURE = 10
 
 
 def softmax_confidences(scores: list[float]) -> list[int]:
-    """Percent chance each raw (0-1) score is the true cause; one candidate keeps its own score."""
+    """Each candidate's softmax share (in %) of the raw 0-1 evidence scores: how decisively it beats
+    the others. A relative measure, not a calibrated probability. One candidate keeps its own score."""
     if len(scores) == 1:
         return [min(99, round(100 * scores[0]))]
     m = max(scores)
