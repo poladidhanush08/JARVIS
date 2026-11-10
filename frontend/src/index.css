@@ -131,6 +131,11 @@ body {
   }
 }
 
+/* a new pending alert card fades in (left off under reduced motion) */
+.card-in {
+  animation: fade-in 150ms ease-out;
+}
+
 .react-flow__attribution {
   display: none;
 }

@@ -3,7 +3,6 @@ import {
   FLIGHT_MS,
   INITIAL_COLLAPSE,
   SETTLE_MS,
-  excludedEvents,
   flightTiming,
   rowsToFlash,
   stepCollapse,
@@ -22,12 +21,19 @@ const findRow = (incidentId: string) =>
     (el) => el.dataset.incidentRow === incidentId,
   );
 
+/** Ref callback that keeps `map` in step with the mounted elements, by id. */
+const track = (map: Map<string, HTMLElement>, id: string) => (el: HTMLElement | null) => {
+  if (el) map.set(id, el);
+  else map.delete(id);
+};
+
 /**
  * Anomalous events waiting to be grouped. Every alert that arrives after the first WebSocket
  * snapshot gets a card; once any listed incident absorbs it (new or existing) and it has been
  * visible for the minimum dwell, it flies into that incident's row (`[data-incident-row=id]`).
- * The choreography (dwell, cap, batches, snapshot rule) is the pure `stepCollapse`; this
- * component only renders its state, runs one wake-up timer and plays the measured slides.
+ * The choreography (dwell, cap, batches, settling, snapshot rule, exclusion) is the pure
+ * `stepCollapse`; this component only renders its state, runs one wake-up timer and plays
+ * the measured slides.
  */
 export default function CollapseStream({
   recentEvents,
@@ -49,8 +55,9 @@ export default function CollapseStream({
     stepCollapse(INITIAL_COLLAPSE, { ...input, reducedMotion: prefersReducedMotion() }, Date.now()),
   );
   const cardEls = useRef(new Map<string, HTMLElement>());
+  const excludedEls = useRef(new Map<string, HTMLElement>());
   const lastFlash = useRef(new Map<string, number>());
-  const lastTops = useRef(new Map<string, number>());
+  const lastTops = useRef(new Map<HTMLElement, number>());
 
   const step = useCallback(() => {
     const now = Date.now();
@@ -64,7 +71,7 @@ export default function CollapseStream({
     step();
   }, [input, step]);
 
-  // The one timer: wake when a dwell ends, a batch lands or a card expires; none while idle.
+  // The one timer: wake when a dwell or settle ends, a batch lands or a card expires; none while idle.
   useEffect(() => {
     if (state.nextWakeAt === null) return;
     const timer = setTimeout(step, Math.max(0, state.nextWakeAt - Date.now()));
@@ -88,7 +95,7 @@ export default function CollapseStream({
         el.style.transform = `translate(${dx}px, ${dy}px) scale(0.6)`;
         el.style.opacity = "0";
       });
-      // the receiving rows flash as the alerts land, at most once per throttle window each
+      // the receiving rows flash as the batch starts, at most once per throttle window each
       const now = Date.now();
       const { total } = flightTiming(flight.cards.length);
       rowsToFlash(
@@ -113,50 +120,47 @@ export default function CollapseStream({
     return () => cancelAnimationFrame(frame);
   }, [flight]);
 
-  // When cards leave, the rest slide up into the freed space instead of jumping.
-  const order = state.shown.map((c) => c.event.id).join("\n");
+  // When cards leave, the rest (pending and excluded) slide into the freed space instead of jumping.
+  const order = [...state.shown.map((c) => c.event.id), "|", ...state.excluded.map((e) => e.id)].join("\n");
   useLayoutEffect(() => {
     const flying = new Set(flight?.cards.map((c) => c.event.id) ?? []);
     const reduce = prefersReducedMotion();
-    const tops = new Map<string, number>();
-    cardEls.current.forEach((el, id) => {
+    const tops = new Map<HTMLElement, number>();
+    const slide = (el: HTMLElement, skip: boolean) => {
       const top = el.offsetTop;
-      tops.set(id, top);
-      const before = lastTops.current.get(id);
-      if (reduce || flying.has(id) || before === undefined || before === top) return;
+      tops.set(el, top);
+      const before = lastTops.current.get(el);
+      if (reduce || skip || before === undefined || before === top) return;
       el.style.transition = "none";
       el.style.transform = `translateY(${before - top}px)`;
       void el.offsetHeight; // commit the start position before transitioning back
       el.style.transition = `transform ${SETTLE_MS}ms ease-out`;
       el.style.transform = "";
-    });
+    };
+    cardEls.current.forEach((el, id) => slide(el, flying.has(id)));
+    excludedEls.current.forEach((el) => slide(el, false));
     lastTops.current = tops;
   }, [order, flight]);
 
   const cards = state.shown.map((c) => c.event);
-  const excluded = useMemo(
-    () => excludedEvents(recentEvents, incidents, new Date(state.clock), receivedAt),
-    [recentEvents, incidents, state.clock, receivedAt],
-  );
-  if (cards.length === 0 && state.overflow === 0 && excluded.length === 0) return null;
+  const { excluded, overflow } = state;
+  if (cards.length === 0 && overflow === 0 && excluded.length === 0) return null;
+  const fadeIn = prefersReducedMotion() ? "" : "card-in";
 
   return (
     <div className="flex flex-col gap-6">
-      {(cards.length > 0 || state.overflow > 0) && (
+      {(cards.length > 0 || overflow > 0) && (
         <section aria-label="Ungrouped alerts" className="flex flex-col gap-2">
           <h2 className="text-label font-semibold uppercase tracking-wide text-muted">
-            {flight ? "Grouping" : "Waiting to be grouped"}
+            {state.grouping ? "Grouping" : "Waiting to be grouped"}
           </h2>
           <ul className="flex flex-col gap-2">
             {cards.map((e) => (
               <li
                 key={e.id}
                 data-testid="pending-card"
-                ref={(el) => {
-                  if (el) cardEls.current.set(e.id, el);
-                  else cardEls.current.delete(e.id);
-                }}
-                className="rounded-lg border border-line bg-surface px-3 py-2 text-label will-change-transform"
+                ref={track(cardEls.current, e.id)}
+                className={`${fadeIn} rounded-lg border border-line bg-surface px-3 py-2 text-label will-change-transform`}
               >
                 <div className="flex items-center gap-2 font-mono font-semibold">
                   <span
@@ -169,9 +173,7 @@ export default function CollapseStream({
               </li>
             ))}
           </ul>
-          {state.overflow > 0 && (
-            <p className="text-label text-muted tabular-nums">+{state.overflow} more arriving</p>
-          )}
+          {overflow > 0 && <p className="text-label text-muted tabular-nums">+{overflow} more arriving</p>}
         </section>
       )}
       {excluded.length > 0 && (
@@ -179,19 +181,20 @@ export default function CollapseStream({
           <h2 className="text-label font-semibold uppercase tracking-wide text-muted">Excluded</h2>
           <ul className="flex flex-col gap-2">
             {excluded.map((e) => (
-              <li
-                key={e.id}
-                data-testid="excluded-card"
-                title="matched no incident: not correlated with the other alerts"
-                className="step-aside rounded-lg border border-dashed border-line bg-surface px-3 py-2 text-label"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate font-mono font-semibold text-muted">{e.service}</span>
-                  <span className="shrink-0 rounded border border-line px-1.5 text-[11px] uppercase tracking-wide text-muted">
-                    excluded
-                  </span>
+              // the outer item slides when the list shifts; the inner card keeps its step-aside animation
+              <li key={e.id} data-testid="excluded-card" ref={track(excludedEls.current, e.id)}>
+                <div
+                  title="matched no incident: not correlated with the other alerts"
+                  className="step-aside rounded-lg border border-dashed border-line bg-surface px-3 py-2 text-label"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate font-mono font-semibold text-muted">{e.service}</span>
+                    <span className="shrink-0 rounded border border-line px-1.5 text-[11px] uppercase tracking-wide text-muted">
+                      excluded
+                    </span>
+                  </div>
+                  <div className="truncate text-muted">{e.message}</div>
                 </div>
-                <div className="truncate text-muted">{e.message}</div>
               </li>
             ))}
           </ul>

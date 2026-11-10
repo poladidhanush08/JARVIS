@@ -1,29 +1,12 @@
 import type { Event, Incident } from "./types";
 
+/** An unabsorbed card is excluded once it has been on screen this long without joining an incident. */
 export const PENDING_WINDOW_MS = 10_000;
 
 const ANOMALOUS_LEVELS = new Set<Event["level"]>(["warn", "error", "critical"]);
 
 export function isAnomalous(e: Event): boolean {
   return e.type === "alert" || ANOMALOUS_LEVELS.has(e.level);
-}
-
-/**
- * Anomalous events from the last `windowMs` that no listed incident has absorbed yet.
- * Age is measured from `receivedAt` (client arrival, ms) when known, since simulator
- * timestamps are compressed and drift from the wall clock; else from the event timestamp.
- */
-export function pendingEvents(
-  events: Event[],
-  incidents: Incident[],
-  now: Date = new Date(),
-  receivedAt: ReadonlyMap<string, number> = new Map(),
-  windowMs: number = PENDING_WINDOW_MS,
-): Event[] {
-  const grouped = new Set(incidents.flatMap((i) => i.event_ids));
-  const cutoff = now.getTime() - windowMs;
-  const at = (e: Event) => receivedAt.get(e.id) ?? new Date(e.timestamp).getTime();
-  return events.filter((e) => isAnomalous(e) && !grouped.has(e.id) && at(e) >= cutoff);
 }
 
 export type ServiceStatus = "root" | "impacted" | "healthy";
@@ -39,24 +22,6 @@ export function serviceStatus(service: string, incidents: Incident[]): ServiceSt
 export function collapseStagger(count: number, durationMs: number, totalMs = 2000, capMs = 200): number {
   if (count <= 1) return 0;
   return Math.max(0, Math.min(capMs, Math.floor((totalMs - durationMs) / (count - 1))));
-}
-
-/**
- * Anomalous events that waited past the window without joining any incident: shown greyed as
- * "excluded" (newest first, at most `max`). They drop out if a later incident absorbs them.
- */
-export function excludedEvents(
-  events: Event[],
-  incidents: Incident[],
-  now: Date = new Date(),
-  receivedAt: ReadonlyMap<string, number> = new Map(),
-  windowMs: number = PENDING_WINDOW_MS,
-  max = 5,
-): Event[] {
-  const grouped = new Set(incidents.flatMap((i) => i.event_ids));
-  const cutoff = now.getTime() - windowMs;
-  const at = (e: Event) => receivedAt.get(e.id) ?? new Date(e.timestamp).getTime();
-  return events.filter((e) => isAnomalous(e) && !grouped.has(e.id) && at(e) < cutoff).slice(0, max);
 }
 
 /* ---------- Collapse choreography: every incoming alert visibly joins its incident ---------- */
@@ -75,6 +40,10 @@ export const FLIGHT_BATCH_MS = 2000;
 export const FLASH_THROTTLE_MS = 600;
 /** Remaining cards slide up into freed space over this; no batch starts meanwhile. */
 export const SETTLE_MS = 200;
+/** Incident rows re-sort with a 250 ms layout slide; batches wait this long so they aim at the final rows. */
+export const LAYOUT_SETTLE_MS = 300;
+/** At most this many excluded cards are listed. */
+export const MAX_EXCLUDED = 5;
 
 export interface ShownCard {
   event: Event;
@@ -103,8 +72,16 @@ export interface CollapseState {
   shown: ShownCard[];
   /** Event ids already flown or removed by absorption; never shown again. */
   flown: ReadonlySet<string>;
+  /** Event ids whose card stayed unabsorbed for the whole window. */
+  expired: ReadonlySet<string>;
+  /** Expired events not absorbed since, newest first: listed greyed as "excluded". */
+  excluded: Event[];
   flight: Flight | null;
   settleUntil: number;
+  /** A batch is flying or the column is still settling after one: the header reads "Grouping". */
+  grouping: boolean;
+  /** Listed incident ids in order, to notice the rows re-sorting. */
+  incidentOrder: string;
   /** Pending cards waiting off-screen because of the cap. */
   overflow: number;
   /** When the state next needs a step (ms), or null when nothing is waiting. */
@@ -125,8 +102,12 @@ export const INITIAL_COLLAPSE: CollapseState = {
   history: null,
   shown: [],
   flown: new Set(),
+  expired: new Set(),
+  excluded: [],
   flight: null,
   settleUntil: 0,
+  grouping: false,
+  incidentOrder: "",
   overflow: 0,
   nextWakeAt: null,
 };
@@ -163,7 +144,9 @@ export function absorbedBy(incidents: Incident[]): Map<string, string> {
  * - Live events (seen after the first snapshot) get a card; once any listed incident absorbs one
  *   and it has been visible for MIN_DWELL_MS, it flies (one batch at a time, oldest first).
  * - Events seen before the snapshot never fly: absorbed, they simply drop out.
- * - At most MAX_VISIBLE_CARDS are on screen; absorbed cards take free slots first.
+ * - At most MAX_VISIBLE_CARDS are on screen; absorbed cards take free slots first. Off-screen
+ *   cards never expire: the exclusion window starts when a card is first shown.
+ * - Batches wait for the column and the incident rows to settle, so they aim at final positions.
  * - With reduced motion, ready cards are removed instead of flown.
  */
 export function stepCollapse(prev: CollapseState, input: CollapseInput, now: number): CollapseState {
@@ -172,36 +155,40 @@ export function stepCollapse(prev: CollapseState, input: CollapseInput, now: num
   const history = prev.history ?? (snapshotIds === null ? null : present);
   const absorbed = absorbedBy(incidents);
   const flown = new Set([...prev.flown].filter((id) => present.has(id)));
+  const expired = new Set([...prev.expired].filter((id) => present.has(id)));
   const settle = reducedMotion ? 0 : SETTLE_MS;
   const at = (e: Event) => receivedAt.get(e.id) ?? new Date(e.timestamp).getTime();
 
   let shown = prev.shown.filter((c) => present.has(c.event.id));
   let removed = shown.length < prev.shown.length;
+  let landed = false;
   let flight = prev.flight;
-  if (flight && !flight.cards.every((c) => present.has(c.event.id))) flight = null; // engine reset
-  if (flight && now >= flight.endsAt) {
-    const landed = new Set(flight.cards.map((c) => c.event.id));
-    landed.forEach((id) => flown.add(id));
-    shown = shown.filter((c) => !landed.has(c.event.id));
+  // A batch lands when its time is up, or at once if some of its events dropped out (engine reset).
+  if (flight && (now >= flight.endsAt || flight.cards.some((c) => !present.has(c.event.id)))) {
+    const ids = new Set(flight.cards.map((c) => c.event.id));
+    ids.forEach((id) => flown.add(id));
+    shown = shown.filter((c) => !ids.has(c.event.id));
     flight = null;
     removed = true;
+    landed = true;
   }
 
   const clock = flight ? flight.startedAt : now;
   const cutoff = clock - PENDING_WINDOW_MS;
   const flyingIds = new Set(flight?.cards.map((c) => c.event.id) ?? []);
-  const shownIds = new Set(shown.map((c) => c.event.id));
   const live = (id: string) => history !== null && !history.has(id);
 
-  // Cards that belong in the column, oldest first.
+  // Cards shown for the whole window without joining an incident are excluded.
+  for (const c of shown) {
+    if (!flyingIds.has(c.event.id) && !absorbed.has(c.event.id) && c.shownAt < cutoff) expired.add(c.event.id);
+  }
+
+  // Cards that belong in the column (on screen or waiting off-screen), oldest first.
   const candidates: Event[] = [];
   for (let i = events.length - 1; i >= 0; i--) {
     const e = events[i];
-    if (!isAnomalous(e) || flown.has(e.id) || flyingIds.has(e.id)) continue;
-    if (absorbed.has(e.id)) {
-      if (!live(e.id)) continue;
-      if (!shownIds.has(e.id) && at(e) < cutoff) continue;
-    } else if (at(e) < cutoff) continue;
+    if (!isAnomalous(e) || flown.has(e.id) || flyingIds.has(e.id) || expired.has(e.id)) continue;
+    if (absorbed.has(e.id) && !live(e.id)) continue;
     candidates.push(e);
   }
   candidates.sort((a, b) => at(a) - at(b));
@@ -210,7 +197,12 @@ export function stepCollapse(prev: CollapseState, input: CollapseInput, now: num
   const before = shown.length;
   shown = shown.filter((c) => flyingIds.has(c.event.id) || candidateIds.has(c.event.id));
   if (shown.length < before) removed = true;
-  const settleUntil = removed && shown.length > 0 ? Math.max(prev.settleUntil, now + settle) : prev.settleUntil;
+  let settleUntil = prev.settleUntil;
+  if (removed && shown.length > 0) settleUntil = Math.max(settleUntil, now + settle);
+  const incidentOrder = incidents.map((i) => i.id).join("\n");
+  if (incidentOrder !== prev.incidentOrder && !reducedMotion) {
+    settleUntil = Math.max(settleUntil, now + LAYOUT_SETTLE_MS);
+  }
 
   // Start the next batch: absorbed cards whose dwell has passed, in display order.
   if (!flight && history !== null && now >= settleUntil) {
@@ -243,17 +235,33 @@ export function stepCollapse(prev: CollapseState, input: CollapseInput, now: num
   shown = [...shown, ...waiting.filter((e) => picked.has(e.id)).map((event) => ({ event, shownAt: now }))];
   const overflow = waiting.length - picked.size;
 
-  // Next moment anything changes: a batch lands, a dwell ends, or a waiting card expires.
+  const grouping = flight !== null || ((prev.grouping || landed) && now < settleUntil && shown.length > 0);
+  const excluded = events.filter((e) => expired.has(e.id) && !absorbed.has(e.id)).slice(0, MAX_EXCLUDED);
+
+  // Next moment anything changes: a batch lands, a dwell or settle ends, or a shown card expires.
   const wakes: number[] = [];
   if (flight) wakes.push(flight.endsAt);
   else {
     for (const c of shown) {
       if (absorbed.has(c.event.id)) wakes.push(Math.max(c.shownAt + MIN_DWELL_MS, settleUntil));
-      else wakes.push(at(c.event) + PENDING_WINDOW_MS + 1);
+      else wakes.push(c.shownAt + PENDING_WINDOW_MS + 1);
     }
-    for (const e of waiting) if (!picked.has(e.id)) wakes.push(at(e) + PENDING_WINDOW_MS + 1);
+    if (grouping) wakes.push(settleUntil);
   }
   const nextWakeAt = wakes.length > 0 ? Math.max(now + 1, Math.min(...wakes)) : null;
 
-  return { clock, history, shown, flown, flight, settleUntil, overflow, nextWakeAt };
+  return {
+    clock,
+    history,
+    shown,
+    flown,
+    expired,
+    excluded,
+    flight,
+    settleUntil,
+    grouping,
+    incidentOrder,
+    overflow,
+    nextWakeAt,
+  };
 }

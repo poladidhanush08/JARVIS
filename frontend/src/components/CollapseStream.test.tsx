@@ -1,7 +1,7 @@
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, vi } from "vitest";
 import type { Event, Incident } from "../lib/types";
-import { FLIGHT_BATCH_MS, FLIGHT_MS, MIN_DWELL_MS } from "../lib/collapse";
+import { FLIGHT_BATCH_MS, FLIGHT_MS, LAYOUT_SETTLE_MS, MIN_DWELL_MS } from "../lib/collapse";
 import CollapseStream from "./CollapseStream";
 
 const T0 = new Date("2026-11-09T12:00:00Z");
@@ -176,7 +176,7 @@ test("an incident first seen right after an empty snapshot animates (no time gra
   rerender(<Harness events={events} incidents={[]} snapshotIds={[]} />);
   advance(400);
   rerender(<Harness events={events} incidents={[inc("INC-001", ["e1", "e2"])]} snapshotIds={[]} />);
-  advance(MIN_DWELL_MS - 400); // shown at +100 ms, so the dwell ends at +700 ms
+  advance(LAYOUT_SETTLE_MS); // dwell ends at +700 ms; the new row has settled by +800 ms
   expect(screen.getByText("Grouping")).toBeInTheDocument();
 });
 
@@ -300,4 +300,26 @@ test("unmounting with queued cards leaves no pending timers", () => {
   advance(MIN_DWELL_MS + 16);
   unmount();
   expect(vi.getTimerCount()).toBe(0);
+});
+
+test("when a new incident lands on top mid-run, cards wait for the rows to settle and aim at their own row", () => {
+  // each incident row sits 100 px below the previous one, by its current DOM position
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+    const rows = Array.from(document.querySelectorAll("[data-incident-row]"));
+    const top = this.dataset.incidentRow ? rows.indexOf(this) * 100 : 0;
+    return { left: 0, top, right: 100, bottom: top + 40, width: 100, height: 40, x: 0, y: top, toJSON: () => ({}) } as DOMRect;
+  });
+  const { rerender } = render(<Harness events={[]} incidents={[inc("inc-1", [])]} />);
+  const events = [ev("e1")];
+  rerender(<Harness events={events} incidents={[inc("inc-1", ["e1"])]} />);
+  advance(500);
+  // the second outage appears above the first just before e1's dwell ends
+  rerender(<Harness events={events} incidents={[inc("inc-2", []), inc("inc-1", ["e1"])]} />);
+  advance(MIN_DWELL_MS - 500);
+  expect(screen.queryByText("Grouping")).not.toBeInTheDocument();
+  advance(LAYOUT_SETTLE_MS - 100);
+  expect(screen.getByText("Grouping")).toBeInTheDocument();
+  advance(16);
+  // inc-1 is now the second row: centre at 120 px, card centre at 20 px
+  expect(cards()[0].style.transform).toBe("translate(24px, 100px) scale(0.6)");
 });

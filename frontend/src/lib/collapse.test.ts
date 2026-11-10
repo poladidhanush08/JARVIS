@@ -6,11 +6,11 @@ import {
   FLIGHT_MS,
   FLIGHT_STAGGER_MS,
   INITIAL_COLLAPSE,
+  LAYOUT_SETTLE_MS,
   MAX_VISIBLE_CARDS,
   MIN_DWELL_MS,
   collapseStagger,
   flightTiming,
-  pendingEvents,
   rowsToFlash,
   serviceStatus,
   stepCollapse,
@@ -41,31 +41,6 @@ function inc(over: Partial<Incident>): Incident {
   return { id: "inc", event_ids: [], affected_services: [], root_cause_candidates: [], ...over } as Incident;
 }
 
-test("pendingEvents keeps recent anomalous events not yet in an incident", () => {
-  const events = [
-    ev("fresh-error", 2),
-    ev("fresh-alert", 3, { type: "alert", level: "info" }),
-    ev("fresh-warn", 4, { level: "warn" }),
-    ev("fresh-critical", 5, { level: "critical" }),
-    ev("fresh-info", 1, { level: "info" }),
-    ev("old-error", 11),
-    ev("grouped", 1),
-  ];
-  const ids = pendingEvents(events, [inc({ event_ids: ["grouped"] })], NOW).map((e) => e.id);
-  expect(ids).toEqual(["fresh-error", "fresh-alert", "fresh-warn", "fresh-critical"]);
-});
-
-test("pendingEvents ages events by client arrival time when known", () => {
-  // simulator timestamps are compressed and drift from the wall clock
-  const events = [ev("arrived-now", 3600), ev("arrived-long-ago", 0), ev("unknown", 2)];
-  const receivedAt = new Map([
-    ["arrived-now", NOW.getTime() - 1000],
-    ["arrived-long-ago", NOW.getTime() - 11_000],
-  ]);
-  const ids = pendingEvents(events, [], NOW, receivedAt).map((e) => e.id);
-  expect(ids).toEqual(["arrived-now", "unknown"]);
-});
-
 test("serviceStatus: root of any incident wins over impacted", () => {
   const incidents = [
     inc({ affected_services: ["api", "db"], root_cause_candidates: [{ service: "db" } as Incident["root_cause_candidates"][0]] }),
@@ -83,21 +58,6 @@ test("collapseStagger caps per-card delay and keeps the whole collapse within 2 
   const n = 40;
   const s = collapseStagger(n, 300);
   expect(s * (n - 1) + 300).toBeLessThanOrEqual(2000);
-});
-
-test("excluded events are anomalous, ungrouped and older than the window", async () => {
-  const { excludedEvents } = await import("./collapse");
-  const now = new Date("2026-11-09T12:00:30Z");
-  const mk = (id: string, at: string, level: "error" | "info" = "error") =>
-    ({ id, timestamp: at, type: "log", level, service: "s", message: "m" }) as unknown as import("./types").Event;
-  const events = [
-    mk("old", "2026-11-09T12:00:00Z"),
-    mk("fresh", "2026-11-09T12:00:25Z"),
-    mk("quiet", "2026-11-09T12:00:00Z", "info"),
-    mk("grouped", "2026-11-09T12:00:00Z"),
-  ];
-  const incidents = [{ id: "i", event_ids: ["grouped"] }] as unknown as import("./types").Incident[];
-  expect(excludedEvents(events, incidents, now).map((e) => e.id)).toEqual(["old"]);
 });
 
 describe("stepCollapse", () => {
@@ -164,6 +124,7 @@ describe("stepCollapse", () => {
     const events = Array.from({ length: 10 }, (_, i) => alert(`e${i + 1}`)).reverse();
     let s = stepCollapse(seeded(), input(events), T);
     const incidents = [inc({ id: "i", event_ids: ["e1", "e10"] })];
+    s = stepCollapse(s, input(events, incidents), T + 100); // the new row settles by +400 ms
     s = stepCollapse(s, input(events, incidents), T + MIN_DWELL_MS);
     expect(flying(s)).toEqual(["e1"]);
     s = stepCollapse(s, input(events, incidents), s.flight!.endsAt);
@@ -209,6 +170,92 @@ describe("stepCollapse", () => {
     const both = [inc({ id: "i", event_ids: ["e1", "e2"] })];
     s = stepCollapse(s, input(events, both), T + MIN_DWELL_MS + 50);
     expect(flying(s)).toEqual(["e1"]);
+  });
+
+  test("a re-sort of the incident rows holds batches until the rows settle", () => {
+    const events = [alert("e1")];
+    const one = [inc({ id: "i1", event_ids: ["e1"] })];
+    let s = stepCollapse(stepCollapse(seeded(), input([], [inc({ id: "i1" })]), T), input(events, one), T);
+    // a second incident appears on top just before e1's dwell ends
+    const two = [inc({ id: "i2" }), ...one];
+    s = stepCollapse(s, input(events, two), T + 500);
+    expect(s.settleUntil).toBe(T + 500 + LAYOUT_SETTLE_MS);
+    expect(s.nextWakeAt).toBe(T + 500 + LAYOUT_SETTLE_MS);
+    s = stepCollapse(s, input(events, two), T + MIN_DWELL_MS);
+    expect(s.flight).toBeNull();
+    s = stepCollapse(s, input(events, two), T + 500 + LAYOUT_SETTLE_MS);
+    expect(flying(s)).toEqual(["e1"]);
+    expect(s.flight!.cards[0].incidentId).toBe("i1");
+  });
+
+  test("an overflow card's exclusion window starts when it is first shown", () => {
+    const events = Array.from({ length: 9 }, (_, i) => alert(`e${i + 1}`)).reverse();
+    let s = stepCollapse(seeded(), input(events), T);
+    expect(s.overflow).toBe(1);
+    // the eight on screen expire; e9 waited off-screen and is only now shown, not excluded
+    s = stepCollapse(s, input(events), T + 10_001);
+    expect(s.excluded.map((e) => e.id)).toEqual(["e8", "e7", "e6", "e5", "e4"]);
+    expect(ids(s)).toEqual(["e9"]);
+    expect(s.nextWakeAt).toBe(T + 10_001 + 10_001);
+    s = stepCollapse(s, input(events), T + 20_002);
+    expect(ids(s)).toEqual([]);
+    expect(s.excluded[0].id).toBe("e9");
+  });
+
+  test("an overflow card absorbed off-screen is shown for the dwell, then flies", () => {
+    const events = Array.from({ length: 9 }, (_, i) => alert(`e${i + 1}`)).reverse();
+    const incidents = [inc({ id: "i", event_ids: ["e1", "e9"] })];
+    let s = stepCollapse(seeded(), input(events, [inc({ id: "i" })]), T);
+    s = stepCollapse(s, input(events, incidents), T + 9_500);
+    expect(flying(s)).toEqual(["e1"]);
+    s = stepCollapse(s, input(events, incidents), s.flight!.endsAt);
+    expect(ids(s)).toContain("e9");
+    const shownAt = s.shown.find((c) => c.event.id === "e9")!.shownAt;
+    // its dwell runs past 10 s after it arrived: it must not be dropped
+    s = stepCollapse(s, input(events, incidents), shownAt + MIN_DWELL_MS - 1);
+    expect(s.flight).toBeNull();
+    expect(ids(s)).toContain("e9");
+    while (!s.flight && s.nextWakeAt !== null) s = stepCollapse(s, input(events, incidents), s.nextWakeAt);
+    expect(flying(s)).toEqual(["e9"]);
+    expect(s.flight!.startedAt).toBeGreaterThanOrEqual(shownAt + MIN_DWELL_MS);
+  });
+
+  test("when some flying events drop out, the rest land at once instead of lingering", () => {
+    const events = [alert("e2"), alert("e1")];
+    const incidents = [inc({ id: "i", event_ids: ["e1", "e2"] })];
+    let s = stepCollapse(seeded(), input(events, incidents), T);
+    s = stepCollapse(s, input(events, incidents), T + MIN_DWELL_MS);
+    expect(flying(s)).toEqual(["e1", "e2"]);
+    s = stepCollapse(s, input([alert("e2")], incidents), T + MIN_DWELL_MS + 50);
+    expect(s.flight).toBeNull();
+    expect(ids(s)).toEqual([]);
+    expect(s.nextWakeAt).toBeNull();
+  });
+
+  test("the header stays on Grouping from the batch start until the settle ends", () => {
+    const events = [alert("e2"), alert("e1")];
+    const incidents = [inc({ id: "i", event_ids: ["e1"] })];
+    let s = stepCollapse(seeded(), input(events, incidents), T);
+    expect(s.grouping).toBe(false);
+    s = stepCollapse(s, input(events, incidents), T + MIN_DWELL_MS);
+    expect(s.grouping).toBe(true);
+    const landsAt = s.flight!.endsAt;
+    s = stepCollapse(s, input(events, incidents), landsAt);
+    expect(s.flight).toBeNull();
+    expect(s.grouping).toBe(true); // e2 slides up into e1's place
+    expect(s.nextWakeAt).toBe(s.settleUntil);
+    s = stepCollapse(s, input(events, incidents), s.settleUntil);
+    expect(s.grouping).toBe(false);
+  });
+
+  test("excluded cards are listed newest first and drop out once absorbed", () => {
+    const events = [alert("e2"), alert("e1")];
+    let s = stepCollapse(seeded(), input(events), T);
+    s = stepCollapse(s, input(events), T + 10_001);
+    expect(s.excluded.map((e) => e.id)).toEqual(["e2", "e1"]);
+    s = stepCollapse(s, input(events, [inc({ id: "late", event_ids: ["e1"] })]), T + 11_000);
+    expect(s.excluded.map((e) => e.id)).toEqual(["e2"]);
+    expect(ids(s)).toEqual([]); // an excluded card never comes back to fly
   });
 
   test("flightTiming keeps 300 ms per card, ≤120 ms stagger and ≤2 s per batch", () => {
