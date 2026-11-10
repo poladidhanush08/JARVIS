@@ -277,6 +277,7 @@ function IncidentView({
               activeIndex={graphIndex}
               selected={replay.index === null ? selected : null}
               onSelect={setSelected}
+              events={events}
             />
           </Card>
         </div>
